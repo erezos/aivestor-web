@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, BarChart3, Activity, Target } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -52,7 +52,7 @@ export default function Asset() {
   const asset = ASSET_DATA[symbol] || DEFAULT_ASSET;
   const positive = asset.change >= 0;
   const [timeRange, setTimeRange] = useState('1M');
-  const chartData = React.useMemo(() => generateChartData(timeRange, positive), [timeRange, positive]);
+  const chartData = useMemo(() => generateChartData(timeRange, positive), [timeRange, positive]);
 
   return (
     <div className="space-y-5 pb-20 md:pb-6">
