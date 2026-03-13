@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 
 export default function MiniChart({ positive = true }) {
@@ -13,7 +13,7 @@ export default function MiniChart({ positive = true }) {
     return data;
   };
 
-  const data = React.useMemo(() => generateData(), [positive]);
+  const data = useMemo(() => generateData(), [positive]);
   const color = positive ? '#10B981' : '#F43F5E';
 
   return (
