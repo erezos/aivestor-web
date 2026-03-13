@@ -1,18 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, BarChart3, Activity, Target } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-
-const ASSET_DATA = {
-  'NVDA': { name: 'NVIDIA Corp', price: 892.45, change: 5.67, sector: 'Technology', marketCap: '2.2T', pe: 68.5, volume: '89.2M', high52: 974.94, low52: 394.36 },
-  'TSLA': { name: 'Tesla Inc', price: 248.32, change: 3.21, sector: 'Auto', marketCap: '789B', pe: 72.3, volume: '124.5M', high52: 299.29, low52: 138.80 },
-  'AAPL': { name: 'Apple Inc', price: 198.76, change: 1.45, sector: 'Technology', marketCap: '3.1T', pe: 31.2, volume: '67.3M', high52: 237.49, low52: 164.08 },
-  'BTC': { name: 'Bitcoin', price: 97432, change: -2.14, sector: 'Crypto', marketCap: '1.9T', pe: '-', volume: '48.9B', high52: 108786, low52: 38505 },
-  'MSFT': { name: 'Microsoft Corp', price: 445.23, change: 2.34, sector: 'Technology', marketCap: '3.3T', pe: 36.8, volume: '32.8M', high52: 468.35, low52: 362.90 },
-};
-
-const DEFAULT_ASSET = { name: 'Unknown', price: 100, change: 0, sector: '-', marketCap: '-', pe: '-', volume: '-', high52: 0, low52: 0 };
+import { useQuery } from '@tanstack/react-query';
+import { fetchAssetData } from '../components/marketData';
 
 const TIME_RANGES = ['1D', '1W', '1M', '3M', '1Y', 'All'];
 
@@ -25,20 +17,6 @@ function generateChartData(range, positive) {
   });
 }
 
-const AI_ANALYSIS = {
-  signal: 'Buy',
-  confidence: 82,
-  summary: 'Strong bullish momentum with RSI approaching overbought territory. MACD crossover suggests continuation of upward trend. Volume confirms buying pressure.',
-  indicators: [
-    { name: 'RSI (14)', value: '68.5', signal: 'Neutral' },
-    { name: 'MACD', value: 'Bullish Cross', signal: 'Buy' },
-    { name: 'Bollinger Bands', value: 'Upper Band', signal: 'Caution' },
-    { name: 'SMA 50/200', value: 'Golden Cross', signal: 'Strong Buy' },
-    { name: 'Volume', value: 'Above Avg', signal: 'Buy' },
-    { name: 'Stochastic', value: '72.3', signal: 'Neutral' },
-  ],
-};
-
 function getSignalColor(signal) {
   if (signal === 'Strong Buy' || signal === 'Buy') return 'text-emerald-400';
   if (signal === 'Neutral' || signal === 'Hold') return 'text-amber-400';
@@ -46,12 +24,23 @@ function getSignalColor(signal) {
   return 'text-rose-400';
 }
 
+function Skeleton({ className }) {
+  return <div className={`bg-white/5 rounded animate-pulse ${className}`} />;
+}
+
 export default function Asset() {
   const urlParams = new URLSearchParams(window.location.search);
   const symbol = urlParams.get('symbol') || 'AAPL';
-  const asset = ASSET_DATA[symbol] || DEFAULT_ASSET;
-  const positive = asset.change >= 0;
   const [timeRange, setTimeRange] = useState('1M');
+
+  const { data: asset, isLoading } = useQuery({
+    queryKey: ['asset', symbol],
+    queryFn: () => fetchAssetData(symbol),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const positive = asset ? asset.change >= 0 : true;
   const chartData = useMemo(() => generateChartData(timeRange, positive), [timeRange, positive]);
 
   return (
@@ -62,15 +51,16 @@ export default function Asset() {
           <ArrowLeft className="w-4 h-4" /> Back
         </Link>
         <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-white/5 flex items-center justify-center">
-                <span className="text-sm font-bold text-violet-300">{symbol.slice(0,2)}</span>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">{symbol}</h1>
-                <p className="text-sm text-white/30">{asset.name} • {asset.sector}</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-white/5 flex items-center justify-center">
+              <span className="text-sm font-bold text-violet-300">{symbol.slice(0,2)}</span>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">{symbol}</h1>
+              {isLoading
+                ? <Skeleton className="h-4 w-40 mt-1" />
+                : <p className="text-sm text-white/30">{asset?.name} • {asset?.sector}</p>
+              }
             </div>
           </div>
           <div className="flex gap-2">
@@ -78,14 +68,23 @@ export default function Asset() {
             <button className="p-2 rounded-lg glass glass-hover"><Share2 className="w-4 h-4 text-white/40" /></button>
           </div>
         </div>
-        
+
         {/* Price */}
         <div className="mt-4">
-          <span className="text-4xl font-bold text-white">${asset.price.toLocaleString()}</span>
-          <div className={`flex items-center gap-1 mt-1 text-sm font-semibold ${positive ? 'text-gain' : 'text-loss'}`}>
-            {positive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-            {positive ? '+' : ''}{asset.change}%
-          </div>
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-10 w-48" />
+              <Skeleton className="h-5 w-24" />
+            </div>
+          ) : (
+            <>
+              <span className="text-4xl font-bold text-white">${asset?.price?.toLocaleString()}</span>
+              <div className={`flex items-center gap-1 mt-1 text-sm font-semibold ${positive ? 'text-gain' : 'text-loss'}`}>
+                {positive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                {positive ? '+' : ''}{asset?.change}%
+              </div>
+            </>
+          )}
         </div>
       </motion.div>
 
@@ -120,14 +119,7 @@ export default function Asset() {
                 labelStyle={{ color: 'rgba(255,255,255,0.4)' }}
                 formatter={(val) => [`$${val.toFixed(2)}`, 'Price']}
               />
-              <Area
-                type="monotone"
-                dataKey="price"
-                stroke={positive ? '#10B981' : '#F43F5E'}
-                strokeWidth={2}
-                fill="url(#chartGrad)"
-                dot={false}
-              />
+              <Area type="monotone" dataKey="price" stroke={positive ? '#10B981' : '#F43F5E'} strokeWidth={2} fill="url(#chartGrad)" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -141,30 +133,41 @@ export default function Asset() {
             <h3 className="text-sm font-semibold text-white/80">AI Analysis</h3>
           </div>
 
-          <div className="flex items-center gap-4 mb-4">
-            <div className="glass rounded-xl px-4 py-2 text-center">
-              <div className="text-lg font-bold text-emerald-400">{AI_ANALYSIS.signal}</div>
-              <div className="text-[10px] text-white/30">Signal</div>
+          {isLoading ? (
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <Skeleton className="h-12 w-20 rounded-xl" />
+                <Skeleton className="h-12 w-20 rounded-xl" />
+              </div>
+              <Skeleton className="h-16 w-full rounded-xl" />
+              {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-7 w-full rounded" />)}
             </div>
-            <div className="glass rounded-xl px-4 py-2 text-center">
-              <div className="text-lg font-bold text-violet-400">{AI_ANALYSIS.confidence}%</div>
-              <div className="text-[10px] text-white/30">Confidence</div>
-            </div>
-          </div>
-
-          <p className="text-xs text-white/50 leading-relaxed mb-4">{AI_ANALYSIS.summary}</p>
-
-          <div className="space-y-2">
-            {AI_ANALYSIS.indicators.map(ind => (
-              <div key={ind.name} className="flex items-center justify-between py-1.5 border-b border-white/3">
-                <span className="text-xs text-white/40">{ind.name}</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-white/60 font-medium">{ind.value}</span>
-                  <span className={`text-[10px] font-semibold ${getSignalColor(ind.signal)}`}>{ind.signal}</span>
+          ) : (
+            <>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="glass rounded-xl px-4 py-2 text-center">
+                  <div className={`text-lg font-bold ${getSignalColor(asset?.aiSignal)}`}>{asset?.aiSignal}</div>
+                  <div className="text-[10px] text-white/30">Signal</div>
+                </div>
+                <div className="glass rounded-xl px-4 py-2 text-center">
+                  <div className="text-lg font-bold text-violet-400">{asset?.aiConfidence}%</div>
+                  <div className="text-[10px] text-white/30">Confidence</div>
                 </div>
               </div>
-            ))}
-          </div>
+              <p className="text-xs text-white/50 leading-relaxed mb-4">{asset?.aiSummary}</p>
+              <div className="space-y-2">
+                {(asset?.indicators || []).map(ind => (
+                  <div key={ind.name} className="flex items-center justify-between py-1.5 border-b border-white/3">
+                    <span className="text-xs text-white/40">{ind.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-white/60 font-medium">{ind.value}</span>
+                      <span className={`text-[10px] font-semibold ${getSignalColor(ind.signal)}`}>{ind.signal}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Key Stats */}
@@ -173,21 +176,27 @@ export default function Asset() {
             <BarChart3 className="w-4 h-4 text-violet-400" />
             <h3 className="text-sm font-semibold text-white/80">Key Statistics</h3>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'Market Cap', value: asset.marketCap },
-              { label: 'P/E Ratio', value: asset.pe },
-              { label: 'Volume', value: asset.volume },
-              { label: '52W High', value: `$${asset.high52.toLocaleString()}` },
-              { label: '52W Low', value: `$${asset.low52.toLocaleString()}` },
-              { label: 'Sector', value: asset.sector },
-            ].map(stat => (
-              <div key={stat.label} className="glass rounded-xl p-3">
-                <div className="text-[10px] text-white/30 mb-1">{stat.label}</div>
-                <div className="text-sm font-semibold text-white">{stat.value}</div>
-              </div>
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="grid grid-cols-2 gap-3">
+              {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Market Cap', value: asset?.marketCap },
+                { label: 'P/E Ratio', value: asset?.pe },
+                { label: 'Volume', value: asset?.volume },
+                { label: '52W High', value: asset?.high52 ? `$${Number(asset.high52).toLocaleString()}` : '—' },
+                { label: '52W Low', value: asset?.low52 ? `$${Number(asset.low52).toLocaleString()}` : '—' },
+                { label: 'Sector', value: asset?.sector },
+              ].map(stat => (
+                <div key={stat.label} className="glass rounded-xl p-3">
+                  <div className="text-[10px] text-white/30 mb-1">{stat.label}</div>
+                  <div className="text-sm font-semibold text-white">{stat.value || '—'}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
