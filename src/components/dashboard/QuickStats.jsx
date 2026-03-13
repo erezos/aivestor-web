@@ -1,15 +1,45 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, Clock, Zap, Target } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchHotBoard } from '../marketData';
 
-const stats = [
-  { label: 'AI Signals Today', value: '24', icon: Zap, color: 'from-violet-500 to-fuchsia-500' },
-  { label: 'Markets Open', value: '3/4', icon: Clock, color: 'from-emerald-500 to-teal-500' },
-  { label: 'Accuracy 30D', value: '78%', icon: Target, color: 'from-amber-500 to-orange-500' },
-  { label: 'Active Alerts', value: '12', icon: BarChart3, color: 'from-rose-500 to-pink-500' },
-];
+function getMarketsOpen() {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  const hour = now.getUTCHours();
+  const minute = now.getUTCMinutes();
+  const timeNum = hour * 100 + minute;
+
+  // US market: Mon-Fri 13:30-20:00 UTC
+  const usOpen = day >= 1 && day <= 5 && timeNum >= 1330 && timeNum < 2000;
+  // EU market: Mon-Fri 07:00-15:30 UTC
+  const euOpen = day >= 1 && day <= 5 && timeNum >= 700 && timeNum < 1530;
+  // Asia market: Mon-Fri 00:00-06:00 UTC
+  const asiaOpen = day >= 1 && day <= 5 && (timeNum >= 0 && timeNum < 600);
+  // Crypto: always open
+  const count = [usOpen, euOpen, asiaOpen].filter(Boolean).length + 1;
+  return `${count}/4`;
+}
 
 export default function QuickStats() {
+  const { data: hotBoard, isLoading } = useQuery({
+    queryKey: ['hotBoard'],
+    queryFn: fetchHotBoard,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const signalsToday = hotBoard ? hotBoard.filter(t => t.signal === 'Strong Buy' || t.signal === 'Buy' || t.signal === 'Sell' || t.signal === 'Strong Sell').length : null;
+  const strongBuys = hotBoard ? hotBoard.filter(t => t.signal === 'Strong Buy').length : null;
+
+  const stats = [
+    { label: 'AI Signals Today', value: isLoading ? '…' : String(signalsToday ?? '—'), icon: Zap, color: 'from-violet-500 to-fuchsia-500' },
+    { label: 'Markets Open', value: getMarketsOpen(), icon: Clock, color: 'from-emerald-500 to-teal-500' },
+    { label: 'Strong Buys', value: isLoading ? '…' : String(strongBuys ?? '—'), icon: Target, color: 'from-amber-500 to-orange-500' },
+    { label: 'Assets Tracked', value: isLoading ? '…' : String(hotBoard?.length ?? '—'), icon: BarChart3, color: 'from-rose-500 to-pink-500' },
+  ];
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {stats.map((stat, i) => (
