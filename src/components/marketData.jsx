@@ -37,6 +37,31 @@ function fmtChange(pct) {
   return `${sign}${pct.toFixed(2)}%`;
 }
 
+// ─── Batch quote fetch (used by Watchlist & Portfolio) ───────────────────────
+// symbols: array of display symbols like ['AAPL','BTC','ETH']
+export async function fetchMultiQuote(symbols) {
+  const toYahoo = s =>
+    s === 'BTC' ? 'BTC-USD' : s === 'ETH' ? 'ETH-USD' :
+    s === 'SOL' ? 'SOL-USD' : s === 'XRP' ? 'XRP-USD' :
+    s === 'DOGE' ? 'DOGE-USD' : s;
+
+  const yahooSyms = symbols.map(toYahoo);
+  const quotes = await yahooQuote(yahooSyms);
+
+  const result = {};
+  symbols.forEach((sym, i) => {
+    const q = quotes.find(r => r.symbol === yahooSyms[i]);
+    const pct = q?.regularMarketChangePercent ?? 0;
+    result[sym] = {
+      price:    q?.regularMarketPrice ?? 0,
+      change:   fmtChange(pct),
+      pct,
+      positive: pct >= 0,
+    };
+  });
+  return result;
+}
+
 // ─── 1. Market Indices (Yahoo Finance — FREE) ─────────────────────────────────
 export async function fetchMarketIndices() {
   const YAHOO_SYMBOLS = ['^GSPC', '^IXIC', '^DJI', 'BTC-USD', 'ETH-USD', 'GC=F', 'EURUSD=X', '^VIX'];
