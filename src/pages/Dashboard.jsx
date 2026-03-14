@@ -17,10 +17,12 @@ export default function Dashboard() {
         className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2"
       >
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">
-            Market <span className="bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">Pulse</span>
-          </h1>
-          <p className="text-sm text-white/30 mt-1">AI-powered insights • Updated in real-time</p>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">AI</span>Vestor
+            </h1>
+            <p className="text-sm text-white/30 mt-0.5">Your AI edge in the market · Real-time intel</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />

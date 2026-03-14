@@ -23,7 +23,7 @@ const AuthenticatedApp = () => {
       <div className="fixed inset-0 flex items-center justify-center bg-[#0a0a0f]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-violet-500/20 border-t-violet-500 rounded-full animate-spin"></div>
-          <span className="text-sm text-white/30 font-medium">Loading TipSync.AI...</span>
+          <span className="text-sm text-white/30 font-medium">Loading AIVestor...</span>
         </div>
       </div>
     );
