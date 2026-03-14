@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import { fetchAssetData } from '../components/marketData';
 
 const TIME_RANGES = ['1D', '1W', '1M', '3M', '1Y', 'All'];
@@ -32,6 +33,7 @@ export default function Asset() {
   const urlParams = new URLSearchParams(window.location.search);
   const symbol = urlParams.get('symbol') || 'AAPL';
   const [timeRange, setTimeRange] = useState('1M');
+  const queryClient = useQueryClient();
 
   const { data: asset, isLoading } = useQuery({
     queryKey: ['asset', symbol],
@@ -39,6 +41,28 @@ export default function Asset() {
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
+
+  // Watchlist state
+  const { data: watchlist = [] } = useQuery({
+    queryKey: ['watchlist'],
+    queryFn: () => base44.entities.Watchlist.list('-created_date'),
+  });
+  const watchlistItem = watchlist.find(w => w.symbol === symbol);
+  const isWatched = !!watchlistItem;
+
+  const addToWatchlist = useMutation({
+    mutationFn: () => base44.entities.Watchlist.create({ symbol, name: asset?.name || symbol, asset_type: symbol.includes('-') || ['BTC','ETH','SOL','XRP'].includes(symbol) ? 'crypto' : 'stock' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
+  });
+  const removeFromWatchlist = useMutation({
+    mutationFn: () => base44.entities.Watchlist.delete(watchlistItem.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
+  });
+
+  const toggleWatchlist = () => {
+    if (isWatched) removeFromWatchlist.mutate();
+    else addToWatchlist.mutate();
+  };
 
   const positive = asset ? asset.change >= 0 : true;
   const chartData = useMemo(() => generateChartData(timeRange, positive), [timeRange, positive]);
@@ -57,15 +81,21 @@ export default function Asset() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white">{symbol}</h1>
-              {isLoading
-                ? <Skeleton className="h-4 w-40 mt-1" />
-                : <p className="text-sm text-white/30">{asset?.name} • {asset?.sector}</p>
-              }
+              {isLoading ? <Skeleton className="h-4 w-40 mt-1" /> : <p className="text-sm text-white/30">{asset?.name} • {asset?.sector}</p>}
             </div>
           </div>
           <div className="flex gap-2">
-            <button className="p-2 rounded-lg glass glass-hover"><Star className="w-4 h-4 text-white/40" /></button>
-            <button className="p-2 rounded-lg glass glass-hover"><Share2 className="w-4 h-4 text-white/40" /></button>
+            {/* Star / Watchlist button */}
+            <button
+              onClick={toggleWatchlist}
+              className={`p-2 rounded-lg glass transition-all ${isWatched ? 'text-amber-400 bg-amber-400/10 border border-amber-400/20' : 'text-white/40 glass-hover'}`}
+              title={isWatched ? 'Remove from Watchlist' : 'Add to Watchlist'}
+            >
+              <Star className={`w-4 h-4 ${isWatched ? 'fill-amber-400' : ''}`} />
+            </button>
+            <button className="p-2 rounded-lg glass glass-hover" title="Share">
+              <Share2 className="w-4 h-4 text-white/40" />
+            </button>
           </div>
         </div>
 
@@ -81,26 +111,31 @@ export default function Asset() {
               <span className="text-4xl font-bold text-white">${asset?.price?.toLocaleString()}</span>
               <div className={`flex items-center gap-1 mt-1 text-sm font-semibold ${positive ? 'text-gain' : 'text-loss'}`}>
                 {positive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                {positive ? '+' : ''}{asset?.change}%
+                {positive ? '+' : ''}{asset?.change?.toFixed(2)}%
               </div>
             </>
           )}
         </div>
+
+        {/* Watchlist toast hint */}
+        {isWatched && (
+          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+            className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-400 text-xs font-medium"
+          >
+            <Star className="w-3 h-3 fill-amber-400" /> Saved to Watchlist
+          </motion.div>
+        )}
       </motion.div>
 
       {/* Chart */}
       <div className="glass rounded-2xl p-5">
         <div className="flex gap-2 mb-4">
           {TIME_RANGES.map(r => (
-            <button
-              key={r}
-              onClick={() => setTimeRange(r)}
+            <button key={r} onClick={() => setTimeRange(r)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 timeRange === r ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-white/30 hover:text-white/50'
               }`}
-            >
-              {r}
-            </button>
+            >{r}</button>
           ))}
         </div>
         <div className="h-64">
@@ -132,13 +167,9 @@ export default function Asset() {
             <Zap className="w-4 h-4 text-violet-400" />
             <h3 className="text-sm font-semibold text-white/80">AI Analysis</h3>
           </div>
-
           {isLoading ? (
             <div className="space-y-3">
-              <div className="flex gap-3">
-                <Skeleton className="h-12 w-20 rounded-xl" />
-                <Skeleton className="h-12 w-20 rounded-xl" />
-              </div>
+              <div className="flex gap-3"><Skeleton className="h-12 w-20 rounded-xl" /><Skeleton className="h-12 w-20 rounded-xl" /></div>
               <Skeleton className="h-16 w-full rounded-xl" />
               {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-7 w-full rounded" />)}
             </div>
@@ -177,9 +208,7 @@ export default function Asset() {
             <h3 className="text-sm font-semibold text-white/80">Key Statistics</h3>
           </div>
           {isLoading ? (
-            <div className="grid grid-cols-2 gap-3">
-              {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}
-            </div>
+            <div className="grid grid-cols-2 gap-3">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -205,14 +234,10 @@ export default function Asset() {
         className="glass rounded-2xl p-5 text-center border border-violet-500/10"
       >
         <p className="text-xs text-white/30 mb-3">Want to trade {symbol}?</p>
-        <a
-          href="https://www.zulutrade.com"
-          target="_blank"
-          rel="noopener noreferrer"
+        <a href="https://www.zulutrade.com" target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
         >
-          Trade on ZuluTrade
-          <TrendingUp className="w-4 h-4" />
+          Trade on ZuluTrade <TrendingUp className="w-4 h-4" />
         </a>
       </motion.div>
     </div>
