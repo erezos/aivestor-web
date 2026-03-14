@@ -3,9 +3,11 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, TrendingUp, Star, BookOpen, 
   Newspaper, Menu, X, Smartphone, ChevronRight,
-  Zap, PieChart
+  PieChart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const LOGO_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69b3e95402fa8b08d1ec8a16/d6018ef39_generated_image.png';
 
 const navItems = [
   { path: '/Dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -44,17 +46,27 @@ export default function Layout() {
         .bg-loss { background: #F43F5E; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes brand-pulse {
+          0%, 100% { filter: drop-shadow(0 0 6px rgba(168,85,247,0.6)); }
+          50% { filter: drop-shadow(0 0 14px rgba(217,70,239,0.9)); }
+        }
+        .logo-glow { animation: brand-pulse 3s ease-in-out infinite; }
+        @keyframes xp-tick {
+          0% { transform: scaleX(0); }
+          100% { transform: scaleX(1); }
+        }
       `}</style>
 
       {/* Top Nav */}
       <header className="sticky top-0 z-50 glass border-b border-white/5">
         <div className="max-w-[1440px] mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/Dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
+          <Link to="/Dashboard" className="flex items-center gap-2 group">
+            <div className="w-8 h-8 rounded-xl overflow-hidden logo-glow flex-shrink-0 ring-1 ring-violet-500/30">
+              <img src={LOGO_URL} alt="AIVestor" className="w-full h-full object-cover" />
             </div>
-            <span className="font-bold text-lg tracking-tight">
-              TipSync<span className="text-violet-400">.AI</span>
+            <span className="font-black text-lg tracking-tight leading-none">
+              <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">AI</span>
+              <span className="text-white">Vestor</span>
             </span>
           </Link>
 
