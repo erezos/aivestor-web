@@ -104,10 +104,10 @@ export default function Layout() {
               href="https://apps.apple.com/us/app/technical-analysis-ai/id6746874804"
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-xs font-semibold hover:opacity-90 transition-opacity"
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-xs font-semibold hover:opacity-90 transition-opacity ring-1 ring-fuchsia-500/30"
             >
               <Smartphone className="w-3 h-3" />
-              Get the App
+              TA.AI App
             </a>
             
             <button 
