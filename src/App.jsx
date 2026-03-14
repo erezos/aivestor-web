@@ -13,6 +13,7 @@ import Watchlist from './pages/Watchlist';
 import Asset from './pages/Asset';
 import News from './pages/News';
 import Education from './pages/Education';
+import Portfolio from './pages/Portfolio';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -47,6 +48,7 @@ const AuthenticatedApp = () => {
         <Route path="/Asset" element={<Asset />} />
         <Route path="/News" element={<News />} />
         <Route path="/Education" element={<Education />} />
+        <Route path="/Portfolio" element={<Portfolio />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, TrendingUp, Star, BookOpen, 
   Newspaper, Menu, X, Smartphone, ChevronRight,
-  Zap, BarChart3
+  Zap, PieChart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -11,6 +11,7 @@ const navItems = [
   { path: '/Dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/HotBoard', label: 'Hot Board', icon: TrendingUp },
   { path: '/Watchlist', label: 'Watchlist', icon: Star },
+  { path: '/Portfolio', label: 'Portfolio', icon: PieChart },
   { path: '/News', label: 'Market News', icon: Newspaper },
   { path: '/Education', label: 'Learn', icon: BookOpen },
 ];
