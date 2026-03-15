@@ -62,6 +62,9 @@ export default function AddAssetDialog({ open, onClose, existingSymbols }) {
     (s.symbol.toLowerCase().includes(search.toLowerCase()) || s.name.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const searchUpper = search.trim().toUpperCase();
+  const showCustom = searchUpper.length > 0 && !POPULAR.some(s => s.symbol === searchUpper);
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="bg-[#12121a] border-white/10 text-white max-w-md">
@@ -74,13 +77,30 @@ export default function AddAssetDialog({ open, onClose, existingSymbols }) {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
               <input
-                placeholder="Search symbol or name..."
+                placeholder="Search symbol or name… (e.g. MNDY)"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 outline-none focus:border-violet-500/50"
               />
             </div>
             <div className="space-y-1 max-h-64 overflow-y-auto">
+              {/* Custom symbol entry */}
+              {showCustom && (
+                <button onClick={() => handlePick({ symbol: searchUpper, name: searchUpper, type: 'stock' })}
+                  className="w-full flex items-center justify-between p-3 rounded-xl bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 transition-all text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-violet-500/30 flex items-center justify-center">
+                      <span className="text-xs font-bold text-violet-300">{searchUpper.slice(0,2)}</span>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-violet-300">{searchUpper}</div>
+                      <div className="text-[11px] text-white/30">Add custom symbol</div>
+                    </div>
+                  </div>
+                  <Plus className="w-4 h-4 text-violet-400" />
+                </button>
+              )}
               {filtered.map(s => (
                 <button key={s.symbol} onClick={() => handlePick(s)}
                   className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-all text-left"
@@ -97,7 +117,7 @@ export default function AddAssetDialog({ open, onClose, existingSymbols }) {
                   <Plus className="w-4 h-4 text-white/20" />
                 </button>
               ))}
-              {filtered.length === 0 && <p className="text-center text-sm text-white/25 py-8">No symbols found</p>}
+              {filtered.length === 0 && !showCustom && <p className="text-center text-sm text-white/25 py-8">Type a symbol to search</p>}
             </div>
           </div>
         ) : (
