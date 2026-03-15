@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, TrendingUp, Star, BookOpen, 
   Newspaper, Menu, X, Smartphone, ChevronRight,
-  PieChart
+  PieChart, CalendarDays
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -14,6 +14,7 @@ const navItems = [
   { path: '/HotBoard', label: 'Hot Board', icon: TrendingUp },
   { path: '/Watchlist', label: 'Watchlist', icon: Star },
   { path: '/Portfolio', label: 'Portfolio', icon: PieChart },
+  { path: '/Earnings', label: 'Earnings', icon: CalendarDays },
   { path: '/News', label: 'Market News', icon: Newspaper },
   { path: '/Education', label: 'Learn', icon: BookOpen },
 ];
