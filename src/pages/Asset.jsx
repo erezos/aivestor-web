@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { fetchAssetData } from '../components/marketData';
+import TechnicalChart from '../components/asset/TechnicalChart';
 
 const TIME_RANGES = ['1D', '1W', '1M', '3M', '1Y', 'All'];
 
