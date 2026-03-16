@@ -7,16 +7,7 @@ import { base44 } from '@/api/base44Client';
 import { fetchAssetData } from '../components/marketData';
 import TechnicalChart from '../components/asset/TechnicalChart';
 
-const TIME_RANGES = ['1D', '1W', '1M', '3M', '1Y', 'All'];
 
-function generateChartData(range, positive) {
-  const points = { '1D': 24, '1W': 7, '1M': 30, '3M': 90, '1Y': 52, 'All': 100 }[range] || 30;
-  let val = 100;
-  return Array.from({ length: points }, (_, i) => {
-    val += (Math.random() - (positive ? 0.4 : 0.6)) * 3;
-    return { x: i, price: Math.max(50, val) };
-  });
-}
 
 function getSignalColor(signal) {
   if (signal === 'Strong Buy' || signal === 'Buy') return 'text-emerald-400';
