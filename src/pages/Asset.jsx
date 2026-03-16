@@ -23,7 +23,6 @@ function Skeleton({ className }) {
 export default function Asset() {
   const urlParams = new URLSearchParams(window.location.search);
   const symbol = urlParams.get('symbol') || 'AAPL';
-  const [timeRange, setTimeRange] = useState('1M');
   const queryClient = useQueryClient();
 
   const { data: asset, isLoading } = useQuery({
