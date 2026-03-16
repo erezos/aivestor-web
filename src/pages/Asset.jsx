@@ -117,37 +117,7 @@ export default function Asset() {
       </motion.div>
 
       {/* Chart */}
-      <div className="glass rounded-2xl p-5">
-        <div className="flex gap-2 mb-4">
-          {TIME_RANGES.map(r => (
-            <button key={r} onClick={() => setTimeRange(r)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                timeRange === r ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-white/30 hover:text-white/50'
-              }`}
-            >{r}</button>
-          ))}
-        </div>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={positive ? '#10B981' : '#F43F5E'} stopOpacity={0.2} />
-                  <stop offset="100%" stopColor={positive ? '#10B981' : '#F43F5E'} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="x" hide />
-              <YAxis hide domain={['auto', 'auto']} />
-              <Tooltip
-                contentStyle={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: 'white' }}
-                labelStyle={{ color: 'rgba(255,255,255,0.4)' }}
-                formatter={(val) => [`$${val.toFixed(2)}`, 'Price']}
-              />
-              <Area type="monotone" dataKey="price" stroke={positive ? '#10B981' : '#F43F5E'} strokeWidth={2} fill="url(#chartGrad)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      <TechnicalChart symbol={symbol} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* AI Analysis */}
