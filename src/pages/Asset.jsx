@@ -55,7 +55,6 @@ export default function Asset() {
   };
 
   const positive = asset ? asset.change >= 0 : true;
-  const chartData = useMemo(() => generateChartData(timeRange, positive), [timeRange, positive]);
 
   return (
     <div className="space-y-5 pb-20 md:pb-6">
