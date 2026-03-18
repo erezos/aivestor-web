@@ -51,7 +51,7 @@ export default function Asset() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
   });
   const removeFromWatchlist = useMutation({
-    mutationFn: () => base44.entities.Watchlist.delete(watchlistItem.id),
+    mutationFn: () => base44.entities.Watchlist.delete(watchlistItem?.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
   });
 
