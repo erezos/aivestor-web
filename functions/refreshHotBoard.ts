@@ -43,16 +43,17 @@ Deno.serve(async (req) => {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'application/json',
     };
+    // Use 5d range so we have 2 closes to calculate % change accurately
     const priceResults = await Promise.all(HOT_SYMBOLS.map(async sym => {
-      const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=2d&interval=1d`, { headers: HEADERS });
+      const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=5d&interval=1d`, { headers: HEADERS });
       const json = await res.json();
-      const meta = json?.chart?.result?.[0]?.meta;
-      const price = meta?.regularMarketPrice ?? meta?.previousClose ?? 0;
-      const prev  = meta?.previousClose ?? 0;
-      const pct   = (meta?.regularMarketChangePercent != null && meta.regularMarketChangePercent !== 0)
-        ? meta.regularMarketChangePercent
-        : (price && prev ? ((price - prev) / prev) * 100 : 0);
-      return { symbol: sym, regularMarketPrice: price, regularMarketChangePercent: pct, regularMarketVolume: meta?.regularMarketVolume ?? 0 };
+      const result = json?.chart?.result?.[0];
+      const meta   = result?.meta || {};
+      const closes = result?.indicators?.quote?.[0]?.close?.filter(v => v != null) || [];
+      const price  = meta.regularMarketPrice ?? closes[closes.length - 1] ?? 0;
+      const prev   = closes.length >= 2 ? closes[closes.length - 2] : (meta.previousClose ?? price);
+      const pct    = price && prev && prev !== 0 ? ((price - prev) / prev) * 100 : 0;
+      return { symbol: sym, regularMarketPrice: price, regularMarketChangePercent: pct, regularMarketVolume: meta.regularMarketVolume ?? 0 };
     }));
     const quotes = priceResults;
 
