@@ -8,10 +8,16 @@ async function fhQuote(symbol) {
   return d?.c ? { price: d.c, pct: d.dp || 0 } : null;
 }
 
-async function bnQuote(binanceSym) {
-  const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${binanceSym}`);
+// Crypto via Finnhub (more server-reliable than Binance which geo-blocks cloud IPs)
+async function cryptoQuote(fhSym) {
+  // Finnhub crypto format: BINANCE:BTCUSDT
+  const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=BINANCE:${fhSym}&token=${FINNHUB_KEY}`);
   const d = res.ok ? await res.json() : null;
-  return d?.lastPrice ? { price: parseFloat(d.lastPrice), pct: parseFloat(d.priceChangePercent) } : null;
+  if (d?.c) return { price: d.c, pct: d.dp || 0 };
+  // fallback: Coinbase format
+  const res2 = await fetch(`https://finnhub.io/api/v1/quote?symbol=COINBASE:${fhSym.replace('USDT','USD')}&token=${FINNHUB_KEY}`);
+  const d2 = res2.ok ? await res2.json() : null;
+  return d2?.c ? { price: d2.c, pct: d2.dp || 0 } : null;
 }
 
 function fmtPrice(n) {
