@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     if (type === 'multi' && symbols?.length) {
       const quotes = await Promise.all(symbols.map(sym =>
         CRYPTO_SET.has(sym.toUpperCase())
-          ? bnQuote(sym.toUpperCase() + 'USDT')
+          ? cryptoQuote(sym.toUpperCase() + 'USDT')
           : fhQuote(sym)
       ));
       const result = {};
