@@ -38,15 +38,17 @@ function fmt(n) {
   return n.toLocaleString();
 }
 
+// Note: Finnhub /quote works for stocks & ETFs. Use ETF proxies for indices.
+// OANDA forex requires forex subscription; use Finnhub forex quote endpoint differently.
 const INDICES = [
-  { label: 'S&P 500', src: 'fh', sym: '^GSPC'        },
-  { label: 'NASDAQ',  src: 'fh', sym: '^IXIC'        },
-  { label: 'DOW',     src: 'fh', sym: '^DJI'         },
-  { label: 'BTC/USD', src: 'cr', sym: 'BTCUSDT'      },
-  { label: 'ETH/USD', src: 'cr', sym: 'ETHUSDT'      },
-  { label: 'GOLD',    src: 'fh', sym: 'OANDA:XAU_USD'},
-  { label: 'EUR/USD', src: 'fh', sym: 'OANDA:EUR_USD'},
-  { label: 'VIX',     src: 'fh', sym: '^VIX'         },
+  { label: 'S&P 500', src: 'fh', sym: 'SPY'           }, // ETF proxy
+  { label: 'NASDAQ',  src: 'fh', sym: 'QQQ'           }, // ETF proxy
+  { label: 'DOW',     src: 'fh', sym: 'DIA'           }, // ETF proxy
+  { label: 'BTC/USD', src: 'cr', sym: 'BTCUSDT'       },
+  { label: 'ETH/USD', src: 'cr', sym: 'ETHUSDT'       },
+  { label: 'GOLD',    src: 'fh', sym: 'GLD'           }, // ETF proxy
+  { label: 'EUR/USD', src: 'fx', sym: 'OANDA:EUR_USD' },
+  { label: 'VIX',     src: 'fh', sym: 'UVXY'          }, // VIX proxy ETF
 ];
 
 const TRENDING = [
