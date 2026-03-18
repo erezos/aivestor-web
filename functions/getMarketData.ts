@@ -26,9 +26,11 @@ async function fxQuote(pair) {
   const [base] = pair.split('/');
   const res = await fetch(`https://finnhub.io/api/v1/forex/rates?base=${base}&token=${FINNHUB_KEY}`);
   const d = res.ok ? await res.json() : null;
+  // forex/rates returns how many units of each currency per 1 base unit
+  // e.g. base=EUR → quote.USD = 1.08 means EUR/USD = 1.08
   const rate = d?.quote?.USD;
   if (!rate) return null;
-  return { price: parseFloat((1 / rate).toFixed(5)), pct: 0 };
+  return { price: parseFloat(rate.toFixed(5)), pct: 0 };
 }
 
 function fmtPrice(n) {
