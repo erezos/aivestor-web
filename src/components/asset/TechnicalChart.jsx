@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, CrosshairMode, LineStyle } from 'lightweight-charts';
-import { Zap, Loader2, TrendingUp, BarChart2, Activity } from 'lucide-react';
+import { Zap, Loader2, BarChart2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 import { base44 } from '@/api/base44Client';
