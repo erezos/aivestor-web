@@ -20,42 +20,36 @@ Deno.serve(async (req) => {
     const yahooSym = ['BTC','ETH','SOL','XRP'].includes(symbol) ? `${symbol}-USD` : symbol;
     const cacheKey = `asset_${symbol}`;
 
-    // Check server-side cache (30 min TTL)
-    const cached = await base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey });
+    // Run cache lookup + live price fetch in parallel
+    const [cached, priceRes] = await Promise.all([
+      base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey }),
+      fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=2d&interval=1d`,
+        { headers: HEADERS }
+      ).then(r => r.json()),
+    ]);
+
     const cacheEntry = cached[0];
     const cacheAge = cacheEntry ? Date.now() - new Date(cacheEntry.refreshed_at).getTime() : Infinity;
 
-    // Fetch live price always (fast, no AI) — use v8/chart which is most reliable server-side
-    const priceRes = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=2d&interval=1d`,
-      { headers: HEADERS }
-    );
-    const priceJson = await priceRes.json();
-    const chartResult = priceJson?.chart?.result?.[0];
-    const meta = chartResult?.meta || {};
-    const q = {
-      regularMarketPrice:         meta.regularMarketPrice ?? meta.previousClose ?? null,
-      regularMarketChangePercent: meta.regularMarketChangePercent ?? 0,
-      shortName:                  meta.shortName || meta.symbol || yahooSym,
-      sector:                     meta.sector || null,
-      marketCap:                  meta.marketCap || null,
-      trailingPE:                 meta.trailingPE || null,
-      regularMarketVolume:        meta.regularMarketVolume || null,
-      fiftyTwoWeekHigh:           meta.fiftyTwoWeekHigh || null,
-      fiftyTwoWeekLow:            meta.fiftyTwoWeekLow || null,
-    };
+    const meta = priceRes?.chart?.result?.[0]?.meta || {};
+    const livePrice = meta.regularMarketPrice ?? meta.previousClose ?? null;
+    const liveChange = meta.regularMarketChangePercent ?? 0;
 
-    if (cacheAge < CACHE_TTL_MS && cacheEntry) {
-      // Return cached AI analysis + fresh live price
+    // If cache is fresh or stale-but-exists, return immediately with live price
+    if (cacheEntry) {
       const cachedData = JSON.parse(cacheEntry.data);
-      return Response.json({
-        ...cachedData,
-        price: q?.regularMarketPrice ?? cachedData.price ?? 0,
-        change: q?.regularMarketChangePercent ?? cachedData.change ?? 0,
-      });
+      const result = { ...cachedData, price: livePrice ?? cachedData.price ?? 0, change: liveChange };
+
+      // If stale, trigger background AI refresh (fire and forget)
+      if (cacheAge >= CACHE_TTL_MS) {
+        refreshAiCache(base44, symbol, yahooSym, meta, cacheEntry);
+      }
+
+      return Response.json(result);
     }
 
-    // Cache miss or expired — run AI analysis + price in parallel
+    // Cold cache — must run AI synchronously
     const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt: `Technical analysis for ${symbol} as of ${new Date().toDateString()}. Provide: overall signal (Strong Buy/Buy/Hold/Sell/Strong Sell), confidence% (0-100), 2-sentence summary, 6 indicator readings for RSI(14), MACD, Bollinger Bands, SMA 50/200, Volume Trend, Stochastic — each with value string and signal.`,
       response_json_schema: {
@@ -73,33 +67,65 @@ Deno.serve(async (req) => {
     });
 
     const analysisData = {
-      name:         q?.shortName || q?.longName || symbol,
-      sector:       q?.sector || (yahooSym.includes('-USD') ? 'Crypto' : 'Equity'),
-      marketCap:    q?.marketCap ? fmt(q.marketCap) : '—',
-      pe:           q?.trailingPE ? q.trailingPE.toFixed(1) : '—',
-      volume:       q?.regularMarketVolume ? fmt(q.regularMarketVolume) : '—',
-      high52:       q?.fiftyTwoWeekHigh ?? null,
-      low52:        q?.fiftyTwoWeekLow ?? null,
+      name:         meta.shortName || meta.symbol || symbol,
+      sector:       meta.sector || (yahooSym.includes('-USD') ? 'Crypto' : 'Equity'),
+      marketCap:    meta.marketCap ? fmt(meta.marketCap) : '—',
+      pe:           meta.trailingPE ? meta.trailingPE.toFixed(1) : '—',
+      volume:       meta.regularMarketVolume ? fmt(meta.regularMarketVolume) : '—',
+      high52:       meta.fiftyTwoWeekHigh ?? null,
+      low52:        meta.fiftyTwoWeekLow ?? null,
       aiSignal:     aiResult.aiSignal,
       aiConfidence: aiResult.aiConfidence,
       aiSummary:    aiResult.aiSummary,
       indicators:   aiResult.indicators || [],
     };
 
-    // Store in cache
+    // Save to cache
     const payload = { cache_key: cacheKey, data: JSON.stringify(analysisData), refreshed_at: new Date().toISOString() };
-    if (cacheEntry) {
-      await base44.asServiceRole.entities.CachedData.update(cacheEntry.id, payload);
-    } else {
-      await base44.asServiceRole.entities.CachedData.create(payload);
-    }
+    base44.asServiceRole.entities.CachedData.create(payload);
 
-    return Response.json({
-      ...analysisData,
-      price: q?.regularMarketPrice ?? 0,
-      change: q?.regularMarketChangePercent ?? 0,
-    });
+    return Response.json({ ...analysisData, price: livePrice ?? 0, change: liveChange });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
+
+async function refreshAiCache(base44, symbol, yahooSym, meta, cacheEntry) {
+  try {
+    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      prompt: `Technical analysis for ${symbol} as of ${new Date().toDateString()}. Provide: overall signal (Strong Buy/Buy/Hold/Sell/Strong Sell), confidence% (0-100), 2-sentence summary, 6 indicator readings for RSI(14), MACD, Bollinger Bands, SMA 50/200, Volume Trend, Stochastic — each with value string and signal.`,
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          aiSignal:     { type: 'string' },
+          aiConfidence: { type: 'number' },
+          aiSummary:    { type: 'string' },
+          indicators: {
+            type: 'array',
+            items: { type: 'object', properties: { name: {type:'string'}, value: {type:'string'}, signal: {type:'string'} } }
+          }
+        }
+      }
+    });
+
+    const analysisData = {
+      name:         meta.shortName || meta.symbol || symbol,
+      sector:       meta.sector || (yahooSym.includes('-USD') ? 'Crypto' : 'Equity'),
+      marketCap:    meta.marketCap ? fmt(meta.marketCap) : '—',
+      pe:           meta.trailingPE ? meta.trailingPE.toFixed(1) : '—',
+      volume:       meta.regularMarketVolume ? fmt(meta.regularMarketVolume) : '—',
+      high52:       meta.fiftyTwoWeekHigh ?? null,
+      low52:        meta.fiftyTwoWeekLow ?? null,
+      aiSignal:     aiResult.aiSignal,
+      aiConfidence: aiResult.aiConfidence,
+      aiSummary:    aiResult.aiSummary,
+      indicators:   aiResult.indicators || [],
+    };
+
+    await base44.asServiceRole.entities.CachedData.update(cacheEntry.id, {
+      cache_key: `asset_${symbol}`,
+      data: JSON.stringify(analysisData),
+      refreshed_at: new Date().toISOString(),
+    });
+  } catch (_) { /* background refresh — ignore errors */ }
+}
