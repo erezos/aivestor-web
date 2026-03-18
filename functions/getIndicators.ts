@@ -118,8 +118,7 @@ Deno.serve(async (req) => {
 
     // Get OHLCV — Alpaca for stocks (reliable), Finnhub candles as fallback for crypto
     const ohlcv = isCrypto
-      ? await getFinnhubCandles(cleanSym + 'USDT')  // Finnhub has crypto too
-          .then(d => d || getFinnhubCandles(cleanSym))  // fallback without USDT
+      ? await getAlpacaCryptoBars(cleanSym)
       : await getAlpacaOHLCV(cleanSym);
 
     if (!ohlcv || ohlcv.closes.length < 20) {
