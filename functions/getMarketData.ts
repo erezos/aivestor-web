@@ -4,22 +4,21 @@ const HEADERS = {
   'Accept': 'application/json',
 };
 
-// Fetch latest price + change for a symbol via the chart endpoint (most reliable)
+// Fetch latest price + change via 5d daily candles — calculate pct from last 2 closes
 async function fetchPrice(symbol) {
   const res = await fetch(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=2d&interval=1d`,
+    `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=5d&interval=1d`,
     { headers: HEADERS }
   );
   const json = await res.json();
   const result = json?.chart?.result?.[0];
   if (!result) return null;
-  const meta = result.meta;
-  const price = meta?.regularMarketPrice ?? null;
-  const prev  = meta?.previousClose ?? null;
-  const pct   = (meta?.regularMarketChangePercent != null && meta.regularMarketChangePercent !== 0)
-    ? meta.regularMarketChangePercent
-    : (price && prev && prev !== 0 ? ((price - prev) / prev) * 100 : null);
-  return { symbol, price, pct, prevClose: prev };
+  const meta   = result.meta;
+  const closes = result.indicators?.quote?.[0]?.close?.filter(v => v != null) || [];
+  const price  = meta?.regularMarketPrice ?? closes[closes.length - 1] ?? null;
+  const prev   = closes.length >= 2 ? closes[closes.length - 2] : (meta?.previousClose ?? null);
+  const pct    = price && prev && prev !== 0 ? ((price - prev) / prev) * 100 : null;
+  return { symbol, price, pct };
 }
 
 // Fetch all symbols concurrently
