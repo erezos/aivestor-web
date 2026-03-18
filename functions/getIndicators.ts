@@ -85,15 +85,16 @@ async function getAlpacaOHLCV(symbol, days = 120) {
   };
 }
 
-async function getFinnhubCandles(symbol, days = 120) {
-  const now  = Math.floor(Date.now() / 1000);
-  const from = now - days * 86400;
-  const url  = `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${now}&token=${FINNHUB_KEY}`;
-  const res  = await fetch(url);
+async function getAlpacaCryptoBars(symbol, days = 120) {
+  const start    = new Date(Date.now() - days * 86400000).toISOString();
+  const alpacaSym = `${symbol}/USD`;
+  const url = `https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=${encodeURIComponent(alpacaSym)}&timeframe=1Day&start=${start}&limit=200&sort=asc`;
+  const res = await fetch(url, { headers: { 'APCA-API-KEY-ID': ALPACA_KEY, 'APCA-API-SECRET-KEY': ALPACA_SEC } });
   if (!res.ok) return null;
   const json = await res.json();
-  if (json.s !== 'ok' || !json.c?.length) return null;
-  return { closes: json.c, highs: json.h, lows: json.l, volumes: json.v };
+  const bars = json.bars?.[alpacaSym] || [];
+  if (!bars.length) return null;
+  return { closes: bars.map(b => b.c), highs: bars.map(b => b.h), lows: bars.map(b => b.l), volumes: bars.map(b => b.v) };
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
