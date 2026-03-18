@@ -20,15 +20,12 @@ async function cryptoQuote(fhSym) {
   return d2?.c ? { price: d2.c, pct: d2.dp || 0 } : null;
 }
 
-// Forex via Finnhub forex/rates endpoint
+// Forex via open.er-api.com (free, no key needed)
 async function fxQuote(pair) {
-  // pair like "EUR/USD" — fetch EUR base rates
-  const [base] = pair.split('/');
-  const res = await fetch(`https://finnhub.io/api/v1/forex/rates?base=${base}&token=${FINNHUB_KEY}`);
-  const d = res.ok ? await res.json() : null;
-  // forex/rates returns how many units of each currency per 1 base unit
-  // e.g. base=EUR → quote.USD = 1.08 means EUR/USD = 1.08
-  const rate = d?.quote?.USD;
+  const [base, quote] = pair.split('/');
+  const res = await fetch(`https://open.er-api.com/v6/latest/${base}`);
+  const d   = res.ok ? await res.json() : null;
+  const rate = d?.rates?.[quote];
   if (!rate) return null;
   return { price: parseFloat(rate.toFixed(5)), pct: 0 };
 }
