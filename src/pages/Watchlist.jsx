@@ -48,7 +48,7 @@ export default function Watchlist() {
   const isLoading = watchlistLoading || (symbols.length > 0 && pricesLoading);
 
   const addMutation = useMutation({
-    mutationFn: (data) => base44.entities.Watchlist.create(data),
+    mutationFn: (data) => base44.entities.Watchlist.create({ ...data, device_id: deviceId }),
     onSuccess: (_, variables) => {
       // Use prefix key so it matches regardless of whether currentUser is loaded
       queryClient.invalidateQueries({ queryKey: ['watchlist'] });
