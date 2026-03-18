@@ -193,10 +193,14 @@ export default function Asset() {
         className="glass rounded-2xl p-5 text-center border border-violet-500/10"
       >
         <p className="text-xs text-white/30 mb-3">Want to trade {symbol}?</p>
-        <a href="https://www.zulutrade.com" target="_blank" rel="noopener noreferrer"
+        <a
+          href={/Mobi|Android/i.test(navigator.userAgent)
+            ? "https://h5.vantagemarketapp.com/h5/thirdparty/support/register?agentAccount=MjQwMDAzOTk=&invitecode=tQciI764"
+            : "https://www.vantagemarkets.com/open-live-account/?affid=MjQwMDAzOTk=&invitecode=tQciI764"}
+          target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
         >
-          Trade on ZuluTrade <TrendingUp className="w-4 h-4" />
+          Trade on Vantage <TrendingUp className="w-4 h-4" />
         </a>
       </motion.div>
     </div>
