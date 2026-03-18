@@ -19,12 +19,19 @@ async function fhGet(path) {
   return res.ok ? res.json() : null;
 }
 
-// RSI from Binance klines for crypto
+const ALPACA_KEY = Deno.env.get('ALPACA_API_KEY');
+const ALPACA_SEC = Deno.env.get('ALPACA_API_SECRET');
+const ALPACA_HDR = { 'APCA-API-KEY-ID': ALPACA_KEY, 'APCA-API-SECRET-KEY': ALPACA_SEC };
+
+// RSI from Alpaca crypto bars
 async function cryptoRSI(symbol) {
-  const res  = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=1d&limit=60`);
-  const json = res.ok ? await res.json() : null;
-  if (!Array.isArray(json) || json.length < 16) return null;
-  const closes = json.map(k => parseFloat(k[4]));
+  const start = new Date(Date.now() - 60 * 86400000).toISOString();
+  const sym   = `${symbol}/USD`;
+  const res   = await fetch(`https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=${encodeURIComponent(sym)}&timeframe=1Day&start=${start}&limit=60&sort=asc`, { headers: ALPACA_HDR });
+  const json  = res.ok ? await res.json() : null;
+  const bars  = json?.bars?.[sym] || [];
+  if (bars.length < 16) return null;
+  const closes = bars.map(b => b.c);
   const period = 14;
   let gains = 0, losses = 0;
   for (let i = 1; i <= period; i++) {
