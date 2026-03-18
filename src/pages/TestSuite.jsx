@@ -77,6 +77,35 @@ const TEST_DEFINITIONS = [
     if (!Array.isArray(rows)) throw new Error('CachedData query did not return array');
   }),
 
+  makeTest('Backend: getChartData — timestamps are valid Unix seconds', async () => {
+    const res = await base44.functions.invoke('getChartData', { symbol: 'AAPL', range: '3mo' });
+    if (!Array.isArray(res.data) || res.data.length < 10) throw new Error(`Too few candles: ${res.data?.length}`);
+    const c = res.data[0];
+    // lightweight-charts needs Unix seconds (10-digit), not ms (13-digit)
+    if (String(c.time).length !== 10) throw new Error(`time looks wrong: ${c.time} (should be 10-digit Unix seconds)`);
+    if (c.close <= 0) throw new Error(`Close price invalid: ${c.close}`);
+  }),
+
+  makeTest('Backend: getChartData crypto (BTC) works', async () => {
+    const res = await base44.functions.invoke('getChartData', { symbol: 'BTC', range: '1mo' });
+    if (!Array.isArray(res.data) || res.data.length === 0) throw new Error('No BTC candles returned');
+    if (res.data[0].close < 1000) throw new Error(`BTC close unrealistically low: ${res.data[0].close}`);
+  }),
+
+  makeTest('Backend: chartAiMagic returns signal + markers', async () => {
+    // Fetch real candles first then test AI magic
+    const chartRes = await base44.functions.invoke('getChartData', { symbol: 'AAPL', range: '3mo' });
+    const candles = chartRes.data;
+    if (!candles?.length) throw new Error('No candles for AI test');
+    const recent = candles.slice(-30).map(c => ({ t: c.time, c: c.close }));
+    const last = candles[candles.length - 1];
+    const res = await base44.functions.invoke('chartAiMagic', {
+      symbol: 'AAPL', recent, currentPrice: last.close, sma20: '260', rsi: '55',
+    });
+    if (!res.data?.signal) throw new Error('No signal in chartAiMagic response');
+    if (!res.data?.summary) throw new Error('No summary in chartAiMagic response');
+  }),
+
   makeTest('Portfolio: create, read and delete', async () => {
     const user = await base44.auth.me();
     const created = await base44.entities.Portfolio.create({
