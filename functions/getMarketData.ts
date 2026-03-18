@@ -7,16 +7,10 @@ const HEADERS = {
 
 async function yahooQuote(symbols) {
   const res = await fetch(
-    `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(',')}&range=1d&interval=1d`,
-    { headers: HEADERS }
-  );
-  const spark = await res.json();
-  // Also fetch quote for price/change data
-  const res2 = await fetch(
     `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}&fields=regularMarketPrice,regularMarketChangePercent,regularMarketVolume,fiftyTwoWeekHigh,fiftyTwoWeekLow,marketCap,trailingPE,shortName`,
     { headers: HEADERS }
   );
-  const json = await res2.json();
+  const json = await res.json();
   return json?.quoteResponse?.result || [];
 }
 
