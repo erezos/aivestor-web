@@ -1,12 +1,22 @@
 // Unified server-side price data endpoint (no AI, no cache — live prices)
-const HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; AIVestor/1.0)' };
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'application/json',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
 
 async function yahooQuote(symbols) {
   const res = await fetch(
-    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}`,
+    `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(',')}&range=1d&interval=1d`,
     { headers: HEADERS }
   );
-  const json = await res.json();
+  const spark = await res.json();
+  // Also fetch quote for price/change data
+  const res2 = await fetch(
+    `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}&fields=regularMarketPrice,regularMarketChangePercent,regularMarketVolume,fiftyTwoWeekHigh,fiftyTwoWeekLow,marketCap,trailingPE,shortName`,
+    { headers: HEADERS }
+  );
+  const json = await res2.json();
   return json?.quoteResponse?.result || [];
 }
 
