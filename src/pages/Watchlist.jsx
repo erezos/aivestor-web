@@ -57,10 +57,31 @@ export default function Watchlist() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
   });
 
+  const [customLoading, setCustomLoading] = useState(false);
+
   const filteredSymbols = POPULAR_SYMBOLS.filter(s =>
     !watchlist.some(w => w.symbol === s.symbol) &&
     (s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || s.name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  const trimmed = searchQuery.trim().toUpperCase();
+  const alreadyInWatchlist = watchlist.some(w => w.symbol === trimmed);
+  const showCustomAdd = trimmed.length >= 1 && filteredSymbols.length === 0 && !alreadyInWatchlist;
+
+  const addCustomSymbol = async () => {
+    if (!trimmed) return;
+    setCustomLoading(true);
+    let name = trimmed;
+    let asset_type = 'stock';
+    try {
+      const res = await base44.functions.invoke('getMarketData', { type: 'multi', symbols: [trimmed] });
+      const info = res.data?.[trimmed];
+      if (info?.name) name = info.name;
+      if (['BTC','ETH','SOL','XRP','DOGE','ADA','DOT'].includes(trimmed) || trimmed.endsWith('-USD')) asset_type = 'crypto';
+    } catch {}
+    addMutation.mutate({ symbol: trimmed, name, asset_type });
+    setCustomLoading(false);
+  };
 
   return (
     <div className="space-y-5 pb-20 md:pb-6">
