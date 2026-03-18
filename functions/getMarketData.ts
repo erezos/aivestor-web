@@ -58,7 +58,7 @@ const INDICES = [
   { label: 'BTC/USD', src: 'cr', sym: 'BTCUSDT'       },
   { label: 'ETH/USD', src: 'cr', sym: 'ETHUSDT'       },
   { label: 'GOLD',    src: 'fh', sym: 'GLD'           }, // ETF proxy
-  { label: 'EUR/USD', src: 'fx', sym: 'OANDA:EUR_USD' },
+  { label: 'EUR/USD', src: 'fx', sym: 'EUR/USD'       },
   { label: 'VIX',     src: 'fh', sym: 'UVXY'          }, // VIX proxy ETF
 ];
 
