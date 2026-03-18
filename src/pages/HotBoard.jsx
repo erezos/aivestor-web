@@ -156,12 +156,16 @@ export default function HotBoard() {
         <Zap className="w-8 h-8 text-violet-400 mx-auto mb-3" />
         <h3 className="text-lg font-bold text-white mb-1">Start Trading These Signals</h3>
         <p className="text-xs text-white/30 mb-4 max-w-md mx-auto">
-          Connect to ZuluTrade and copy top traders' strategies automatically. AI-powered, hands-free trading.
+          Open an account with Vantage and trade these AI signals with a trusted global broker.
         </p>
-        <a href="https://www.zulutrade.com" target="_blank" rel="noopener noreferrer"
+        <a
+          href={/Mobi|Android/i.test(navigator.userAgent)
+            ? "https://h5.vantagemarketapp.com/h5/thirdparty/support/register?agentAccount=MjQwMDAzOTk=&invitecode=tQciI764"
+            : "https://www.vantagemarkets.com/open-live-account/?affid=MjQwMDAzOTk=&invitecode=tQciI764"}
+          target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
         >
-          Start Copy Trading <TrendingUp className="w-4 h-4" />
+          Trade on Vantage <TrendingUp className="w-4 h-4" />
         </a>
       </motion.div>
     </div>
