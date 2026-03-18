@@ -33,9 +33,15 @@ export default function Asset() {
   });
 
   // Watchlist state
+  const { data: currentUser } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => base44.auth.me(),
+  });
+
   const { data: watchlist = [] } = useQuery({
-    queryKey: ['watchlist'],
-    queryFn: () => base44.entities.Watchlist.list('-created_date'),
+    queryKey: ['watchlist', currentUser?.email],
+    queryFn: () => base44.entities.Watchlist.filter({ created_by: currentUser.email }, '-created_date'),
+    enabled: !!currentUser,
   });
   const watchlistItem = watchlist.find(w => w.symbol === symbol);
   const isWatched = !!watchlistItem;
