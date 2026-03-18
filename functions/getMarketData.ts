@@ -20,6 +20,17 @@ async function cryptoQuote(fhSym) {
   return d2?.c ? { price: d2.c, pct: d2.dp || 0 } : null;
 }
 
+// Forex via Finnhub forex/rates endpoint
+async function fxQuote(pair) {
+  // pair like "EUR/USD" — fetch EUR base rates
+  const [base] = pair.split('/');
+  const res = await fetch(`https://finnhub.io/api/v1/forex/rates?base=${base}&token=${FINNHUB_KEY}`);
+  const d = res.ok ? await res.json() : null;
+  const rate = d?.quote?.USD;
+  if (!rate) return null;
+  return { price: parseFloat((1 / rate).toFixed(5)), pct: 0 };
+}
+
 function fmtPrice(n) {
   if (!n && n !== 0) return '—';
   if (n >= 10000) return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
