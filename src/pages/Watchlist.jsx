@@ -202,7 +202,29 @@ export default function Watchlist() {
                   <Plus className="w-4 h-4 text-white/30" />
                 </button>
               ))}
-              {filteredSymbols.length === 0 && <p className="text-center text-white/30 text-sm py-6">No more symbols to add</p>}
+              {filteredSymbols.length === 0 && !showCustomAdd && <p className="text-center text-white/30 text-sm py-6">No more symbols to add</p>}
+              {showCustomAdd && (
+                <button
+                  onClick={addCustomSymbol}
+                  disabled={customLoading || addMutation.isPending}
+                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-dashed border-white/10 transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
+                      <span className="text-xs font-bold text-violet-300">{trimmed.slice(0,2)}</span>
+                    </div>
+                    <div className="text-left">
+                      <div className="text-sm font-semibold">{trimmed}</div>
+                      <div className="text-[11px] text-white/30">Add custom symbol</div>
+                    </div>
+                  </div>
+                  {customLoading || addMutation.isPending ? (
+                    <div className="w-4 h-4 border border-white/20 border-t-violet-400 rounded-full animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4 text-violet-400" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </DialogContent>
