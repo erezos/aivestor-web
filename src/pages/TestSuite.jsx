@@ -117,6 +117,73 @@ const TEST_DEFINITIONS = [
     if (!res.data?.summary) throw new Error('No summary in chartAiMagic response');
   }),
 
+  makeTest('Data: Finnhub quote returns real stock price (AAPL)', async () => {
+    const res = await base44.functions.invoke('getMarketData', { type: 'multi', symbols: ['AAPL'] });
+    if (!res.data?.AAPL?.price) throw new Error('No AAPL price from Finnhub');
+    if (res.data.AAPL.price < 50) throw new Error(`AAPL price looks wrong: ${res.data.AAPL.price}`);
+  }),
+
+  makeTest('Data: Binance quote returns real BTC price', async () => {
+    const res = await base44.functions.invoke('getMarketData', { type: 'multi', symbols: ['BTC'] });
+    if (!res.data?.BTC?.price) throw new Error('No BTC price from Binance');
+    if (res.data.BTC.price < 5000) throw new Error(`BTC price looks wrong: ${res.data.BTC.price}`);
+  }),
+
+  makeTest('Data: Alpaca returns AAPL chart candles', async () => {
+    const res = await base44.functions.invoke('getChartData', { symbol: 'AAPL', range: '1mo' });
+    if (!Array.isArray(res.data) || res.data.length === 0) throw new Error('No candles from Alpaca');
+    const c = res.data[0];
+    if (!c.time || !c.open || !c.close) throw new Error('Candle missing fields');
+    if (String(c.time).length !== 10) throw new Error(`Timestamp wrong: ${c.time}`);
+  }),
+
+  makeTest('Data: Binance returns BTC chart candles', async () => {
+    const res = await base44.functions.invoke('getChartData', { symbol: 'BTC', range: '1mo' });
+    if (!Array.isArray(res.data) || res.data.length === 0) throw new Error('No BTC candles from Binance');
+    if (res.data[0].close < 5000) throw new Error(`BTC close unrealistically low: ${res.data[0].close}`);
+  }),
+
+  makeTest('Data: getIndicators returns real RSI for AAPL (Finnhub)', async () => {
+    const res = await base44.functions.invoke('getIndicators', { symbol: 'AAPL' });
+    if (res.data?.rsi === undefined) throw new Error('No RSI returned');
+    if (res.data.rsi < 0 || res.data.rsi > 100) throw new Error(`RSI out of range: ${res.data.rsi}`);
+  }),
+
+  makeTest('Data: getIndicators returns real RSI for BTC (Binance calc)', async () => {
+    const res = await base44.functions.invoke('getIndicators', { symbol: 'BTC' });
+    if (res.data?.rsi === undefined) throw new Error('No RSI returned for BTC');
+    if (res.data.rsi < 0 || res.data.rsi > 100) throw new Error(`BTC RSI out of range: ${res.data.rsi}`);
+  }),
+
+  makeTest('Data: getIndicators returns MACD + Bollinger Bands (AAPL)', async () => {
+    const res = await base44.functions.invoke('getIndicators', { symbol: 'AAPL' });
+    if (res.data?.macd === undefined) throw new Error('No MACD returned');
+    if (res.data?.bbUpper === undefined) throw new Error('No Bollinger Band upper returned');
+  }),
+
+  makeTest('Data: Finnhub market news returns real articles', async () => {
+    const rows = await base44.entities.CachedData.filter({ cache_key: 'news' });
+    if (!Array.isArray(rows) || rows.length === 0) throw new Error('No news cache found — trigger refresh first');
+    const articles = JSON.parse(rows[0].data);
+    if (!articles[0]?.title) throw new Error('Articles missing title');
+    if (!articles[0]?.sentiment) throw new Error('Articles missing sentiment');
+  }),
+
+  makeTest('Data: Finnhub earnings calendar returns real dates', async () => {
+    const rows = await base44.entities.CachedData.filter({ cache_key: 'earnings' });
+    if (!Array.isArray(rows) || rows.length === 0) throw new Error('No earnings cache — trigger refresh first');
+    const earnings = JSON.parse(rows[0].data);
+    if (!earnings[0]?.reportDate) throw new Error('Earnings missing reportDate');
+    if (!earnings[0]?.symbol) throw new Error('Earnings missing symbol');
+  }),
+
+  makeTest('AI: Asset analysis uses real indicator data in prompt', async () => {
+    const res = await base44.functions.invoke('getAssetAnalysis', { symbol: 'AAPL' });
+    if (!res.data?.aiSignal) throw new Error('No aiSignal');
+    if (!res.data?.aiSummary) throw new Error('No aiSummary');
+    if (!res.data?.indicators?.length) throw new Error('No indicators array');
+  }),
+
   makeTest('Portfolio: create, read and delete', async () => {
     const user = await base44.auth.me();
     const created = await base44.entities.Portfolio.create({
