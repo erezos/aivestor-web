@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
 
     if (type === 'trending') {
       const quotes = await Promise.all(
-        TRENDING.map(t => t.src === 'bn' ? bnQuote(t.sym) : fhQuote(t.sym))
+        TRENDING.map(t => t.src === 'cr' ? cryptoQuote(t.sym) : fhQuote(t.sym))
       );
       return Response.json(TRENDING.map((t, i) => {
         const q = quotes[i];
