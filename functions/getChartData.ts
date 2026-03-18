@@ -44,20 +44,30 @@ async function getAlpacaBars(symbol, range) {
   }));
 }
 
-async function getBinanceBars(symbol, range) {
-  const { interval, limit } = BINANCE_CFG[range] || BINANCE_CFG['3mo'];
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const json = await res.json();
-  if (!Array.isArray(json)) return [];
-  return json.map(k => ({
-    time:   Math.floor(Number(k[0]) / 1000),
-    open:   +parseFloat(k[1]).toFixed(4),
-    high:   +parseFloat(k[2]).toFixed(4),
-    low:    +parseFloat(k[3]).toFixed(4),
-    close:  +parseFloat(k[4]).toFixed(4),
-    volume: +parseFloat(k[5]),
+// Crypto chart via Finnhub candles (Binance geo-blocks cloud IPs)
+async function getCryptoBars(symbol, range) {
+  const days = { '1d': 2, '5d': 8, '1mo': 35, '3mo': 95, '1y': 370 }[range] || 95;
+  const res  = { '1d': 'D', '5d': 'D', '1mo': 'D', '3mo': 'D', '1y': 'W' }[range] || 'D';
+  const now  = Math.floor(Date.now() / 1000);
+  const from = now - days * 86400;
+
+  // Try BINANCE: prefix, then COINBASE:
+  const tryFetch = async (fhSym) => {
+    const url = `https://finnhub.io/api/v1/crypto/candle?symbol=${fhSym}&resolution=${res}&from=${from}&to=${now}&token=${FINNHUB_KEY}`;
+    const r   = await fetch(url);
+    const j   = r.ok ? await r.json() : null;
+    return j?.s === 'ok' && j.c?.length ? j : null;
+  };
+
+  const d = await tryFetch(`BINANCE:${symbol}USDT`) || await tryFetch(`COINBASE:${symbol}USD`);
+  if (!d) return [];
+  return d.t.map((ts, i) => ({
+    time:   ts,
+    open:   +d.o[i].toFixed(4),
+    high:   +d.h[i].toFixed(4),
+    low:    +d.l[i].toFixed(4),
+    close:  +d.c[i].toFixed(4),
+    volume: d.v[i] || 0,
   }));
 }
 
