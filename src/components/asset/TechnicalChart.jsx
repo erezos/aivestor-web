@@ -3,7 +3,6 @@ import { createChart, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { Zap, Loader2, BarChart2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
-
 async function fetchCandles(symbol, range = '3mo') {
   const res = await base44.functions.invoke('getChartData', { symbol, range });
   return res.data || [];
@@ -19,6 +18,7 @@ function calcSMA(candles, period) {
 }
 
 function calcRSI(candles, period = 14) {
+  if (candles.length < period + 1) return [];
   const result = [];
   let gains = 0, losses = 0;
   for (let i = 1; i <= period; i++) {
@@ -59,6 +59,7 @@ export default function TechnicalChart({ symbol }) {
   const chartMain  = useRef(null);
   const chartRsi   = useRef(null);
   const seriesRefs = useRef({});
+  const roRef = useRef(null);
 
   const [candles,    setCandles]    = useState([]);
   const [range,      setRange]      = useState('3mo');
@@ -67,15 +68,20 @@ export default function TechnicalChart({ symbol }) {
   const [aiLoading,  setAiLoading]  = useState(false);
   const [aiInsight,  setAiInsight]  = useState(null);
 
-  // ── Build / rebuild charts ─────────────────────────────────────────────────
-  const buildCharts = useCallback((candleData) => {
-    if (!mainRef.current) return;
-
+  const destroyCharts = useCallback(() => {
+    if (roRef.current) { roRef.current.disconnect(); roRef.current = null; }
     if (chartMain.current) { try { chartMain.current.remove(); } catch {} chartMain.current = null; }
     if (chartRsi.current)  { try { chartRsi.current.remove();  } catch {} chartRsi.current  = null; }
     seriesRefs.current = {};
+  }, []);
 
-    const main = createChart(mainRef.current, { ...CHART_THEME, width: mainRef.current.clientWidth, height: 320 });
+  const buildCharts = useCallback((candleData, showRsi) => {
+    if (!mainRef.current) return;
+    destroyCharts();
+
+    const width = mainRef.current.clientWidth || 600;
+
+    const main = createChart(mainRef.current, { ...CHART_THEME, width, height: 320 });
     chartMain.current = main;
 
     const cs = main.addCandlestickSeries({
@@ -86,40 +92,56 @@ export default function TechnicalChart({ symbol }) {
     cs.setData(candleData);
     seriesRefs.current.candles = cs;
 
-    const vol = main.addHistogramSeries({ color: 'rgba(124,58,237,0.2)', priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+    const vol = main.addHistogramSeries({
+      color: 'rgba(124,58,237,0.2)',
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
+    });
     main.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
     vol.setData(candleData.map(c => ({
       time: c.time, value: c.volume,
       color: c.close >= c.open ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)',
     })));
-
     main.timeScale().fitContent();
 
-    if (rsiRef.current) {
-      const rsiChart = createChart(rsiRef.current, { ...CHART_THEME, width: rsiRef.current.clientWidth, height: 120 });
-      chartRsi.current = rsiChart;
-      const rsiSeries = rsiChart.addLineSeries({ color: '#A78BFA', lineWidth: 1.5, priceLineVisible: false });
-      rsiSeries.setData(calcRSI(candleData));
-      const ob = rsiChart.addLineSeries({ color: 'rgba(244,63,94,0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
-      ob.setData(candleData.slice(14).map(c => ({ time: c.time, value: 70 })));
-      const os = rsiChart.addLineSeries({ color: 'rgba(16,185,129,0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
-      os.setData(candleData.slice(14).map(c => ({ time: c.time, value: 30 })));
-      seriesRefs.current.rsi = rsiSeries;
-      rsiChart.timeScale().fitContent();
-      main.subscribeCrosshairMove(p => {
-        if (p?.time) rsiChart.setCrosshairPosition(p.seriesData.get(cs)?.close ?? 0, p.time, rsiSeries);
-      });
+    if (showRsi && rsiRef.current) {
+      const rsiData = calcRSI(candleData);
+      if (rsiData.length > 0) {
+        const rsiWidth = rsiRef.current.clientWidth || 600;
+        const rsiChart = createChart(rsiRef.current, { ...CHART_THEME, width: rsiWidth, height: 120 });
+        chartRsi.current = rsiChart;
+
+        const rsiSeries = rsiChart.addLineSeries({ color: '#A78BFA', lineWidth: 1.5, priceLineVisible: false });
+        rsiSeries.setData(rsiData);
+
+        const obLine = rsiChart.addLineSeries({ color: 'rgba(244,63,94,0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
+        obLine.setData(rsiData.map(d => ({ time: d.time, value: 70 })));
+
+        const osLine = rsiChart.addLineSeries({ color: 'rgba(16,185,129,0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
+        osLine.setData(rsiData.map(d => ({ time: d.time, value: 30 })));
+
+        seriesRefs.current.rsi = rsiSeries;
+        rsiChart.timeScale().fitContent();
+
+        main.subscribeCrosshairMove(p => {
+          if (p?.time) rsiChart.setCrosshairPosition(p.seriesData.get(cs)?.close ?? 0, p.time, rsiSeries);
+        });
+      }
     }
 
+    // ResizeObserver
     const ro = new ResizeObserver(() => {
-      if (mainRef.current) main.applyOptions({ width: mainRef.current.clientWidth });
-      if (rsiRef.current && chartRsi.current) chartRsi.current.applyOptions({ width: rsiRef.current.clientWidth });
+      if (mainRef.current && chartMain.current) {
+        chartMain.current.applyOptions({ width: mainRef.current.clientWidth });
+      }
+      if (rsiRef.current && chartRsi.current) {
+        chartRsi.current.applyOptions({ width: rsiRef.current.clientWidth });
+      }
     });
     if (mainRef.current) ro.observe(mainRef.current);
-    return () => ro.disconnect();
-  }, []);
+    roRef.current = ro;
+  }, [destroyCharts]);
 
-  // ── Indicator overlays ─────────────────────────────────────────────────────
   const applyIndicators = useCallback((candleData, inds) => {
     if (!chartMain.current || !candleData.length) return;
     const main = chartMain.current;
@@ -143,33 +165,57 @@ export default function TechnicalChart({ symbol }) {
     }
   }, []);
 
-  // ── Load candles ───────────────────────────────────────────────────────────
+  // Load candles
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setAiInsight(null);
-    fetchCandles(symbol, range).then(data => {
-      if (cancelled || !data.length) return;
-      setCandles(data);
-      setLoading(false);
-      setIndicators(prev => {
-        buildCharts(data);
-        setTimeout(() => applyIndicators(data, prev), 0);
-        return prev;
+    setCandles([]);
+
+    fetchCandles(symbol, range)
+      .then(data => {
+        if (cancelled) return;
+        setCandles(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
       });
-    }).catch(() => setLoading(false));
-    return () => { cancelled = true; };
-  }, [symbol, range]);
+
+    return () => {
+      cancelled = true;
+      destroyCharts();
+    };
+  }, [symbol, range, destroyCharts]);
+
+  // Build charts once divs are visible and data is ready
+  useEffect(() => {
+    if (loading || !candles.length) return;
+    // rAF ensures the DOM has painted and divs have non-zero dimensions
+    const id = requestAnimationFrame(() => {
+      buildCharts(candles, indicators.rsi);
+      applyIndicators(candles, indicators);
+    });
+    return () => cancelAnimationFrame(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles, loading]);
 
   const toggleIndicator = (key) => {
     setIndicators(prev => {
       const next = { ...prev, [key]: !prev[key] };
-      applyIndicators(candles, next);
+      if (key === 'rsi') {
+        // Rebuild charts to add/remove RSI panel
+        requestAnimationFrame(() => {
+          buildCharts(candles, next.rsi);
+          applyIndicators(candles, next);
+        });
+      } else {
+        applyIndicators(candles, next);
+      }
       return next;
     });
   };
 
-  // ── AI Magic — calls backend function (not InvokeLLM directly) ────────────
   const runAiAnalysis = async () => {
     if (!candles.length) return;
     setAiLoading(true);
@@ -181,8 +227,7 @@ export default function TechnicalChart({ symbol }) {
     const rsiVal   = calcRSI(candles).slice(-1)[0]?.value;
 
     const res = await base44.functions.invoke('chartAiMagic', {
-      symbol,
-      recent,
+      symbol, recent,
       currentPrice: last.close,
       sma20: sma20val?.toFixed(2),
       rsi:   rsiVal?.toFixed(2),
@@ -192,32 +237,44 @@ export default function TechnicalChart({ symbol }) {
     const nextInds = { ...indicators };
     (result.enableIndicators || []).forEach(k => { if (k in nextInds) nextInds[k] = true; });
     setIndicators(nextInds);
-    applyIndicators(candles, nextInds);
 
+    if (result.enableIndicators?.includes('rsi') !== indicators.rsi) {
+      requestAnimationFrame(() => {
+        buildCharts(candles, nextInds.rsi);
+        applyIndicators(candles, nextInds);
+        addAiOverlays(result);
+      });
+    } else {
+      applyIndicators(candles, nextInds);
+      addAiOverlays(result);
+    }
+
+    setAiInsight(result);
+    setAiLoading(false);
+  };
+
+  const addAiOverlays = (result) => {
     if (seriesRefs.current.candles && result.markers?.length) {
       seriesRefs.current.candles.setMarkers(result.markers.map(m => ({
         time: m.time, position: m.position, color: m.color, shape: m.shape, text: m.text,
       })));
     }
-
     const main = chartMain.current;
-    if (main) {
-      if (seriesRefs.current.support)    { main.removeSeries(seriesRefs.current.support);    delete seriesRefs.current.support; }
-      if (seriesRefs.current.resistance) { main.removeSeries(seriesRefs.current.resistance); delete seriesRefs.current.resistance; }
-      if (result.supportLevel) {
-        const s = main.addLineSeries({ color: 'rgba(16,185,129,0.7)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: true, title: 'Support' });
-        s.setData(candles.map(c => ({ time: c.time, value: result.supportLevel })));
-        seriesRefs.current.support = s;
-      }
-      if (result.resistanceLevel) {
-        const r = main.addLineSeries({ color: 'rgba(244,63,94,0.7)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: true, title: 'Resistance' });
-        r.setData(candles.map(c => ({ time: c.time, value: result.resistanceLevel })));
-        seriesRefs.current.resistance = r;
-      }
-    }
+    if (!main) return;
 
-    setAiInsight(result);
-    setAiLoading(false);
+    if (seriesRefs.current.support)    { main.removeSeries(seriesRefs.current.support);    delete seriesRefs.current.support; }
+    if (seriesRefs.current.resistance) { main.removeSeries(seriesRefs.current.resistance); delete seriesRefs.current.resistance; }
+
+    if (result.supportLevel) {
+      const s = main.addLineSeries({ color: 'rgba(16,185,129,0.7)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: true, title: 'Support' });
+      s.setData(candles.map(c => ({ time: c.time, value: result.supportLevel })));
+      seriesRefs.current.support = s;
+    }
+    if (result.resistanceLevel) {
+      const r = main.addLineSeries({ color: 'rgba(244,63,94,0.7)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: true, title: 'Resistance' });
+      r.setData(candles.map(c => ({ time: c.time, value: result.resistanceLevel })));
+      seriesRefs.current.resistance = r;
+    }
   };
 
   const signalColor = (s) => {
@@ -239,7 +296,9 @@ export default function TechnicalChart({ symbol }) {
             {RANGES.map(r => (
               <button key={r.range} onClick={() => setRange(r.range)}
                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  range === r.range ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-white/30 hover:text-white/50'
+                  range === r.range
+                    ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                    : 'text-white/30 hover:text-white/50'
                 }`}
               >{r.label}</button>
             ))}
@@ -264,15 +323,16 @@ export default function TechnicalChart({ symbol }) {
         </div>
       </div>
 
-      {loading ? (
+      {/* Always render chart divs so refs stay valid — hide with CSS during loading */}
+      <div style={{ display: loading ? 'none' : 'block' }}>
+        <div ref={mainRef} className="w-full" style={{ height: 320 }} />
+        <div ref={rsiRef}  className="w-full" style={{ display: indicators.rsi ? 'block' : 'none', height: 120, marginTop: 4 }} />
+      </div>
+
+      {loading && (
         <div className="h-80 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-violet-400" />
         </div>
-      ) : (
-        <>
-          <div ref={mainRef} className="w-full" style={{ height: 320 }} />
-          <div ref={rsiRef}  className="w-full" style={{ display: indicators.rsi ? 'block' : 'none', height: 120 }} />
-        </>
       )}
 
       {aiInsight && (
