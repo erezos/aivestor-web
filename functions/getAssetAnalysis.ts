@@ -1,7 +1,9 @@
+// Asset analysis: Finnhub fundamentals + real indicators + AI interpretation
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
-const HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; AIVestor/1.0)' };
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const FINNHUB_KEY  = Deno.env.get('FINNHUB_API_KEY');
+const CRYPTO_SET   = new Set(['BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','DOT','MATIC','LINK','BNB']);
+const CACHE_TTL_MS = 30 * 60000; // 30 min
 
 function fmt(n) {
   if (!n) return '—';
@@ -11,121 +13,152 @@ function fmt(n) {
   return n.toLocaleString();
 }
 
+async function fhGet(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch(`https://finnhub.io/api/v1${path}${sep}token=${FINNHUB_KEY}`);
+  return res.ok ? res.json() : null;
+}
+
+// RSI from Binance klines for crypto
+async function cryptoRSI(symbol) {
+  const res  = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=1d&limit=60`);
+  const json = res.ok ? await res.json() : null;
+  if (!Array.isArray(json) || json.length < 16) return null;
+  const closes = json.map(k => parseFloat(k[4]));
+  const period = 14;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i-1];
+    if (d > 0) gains += d; else losses -= d;
+  }
+  let ag = gains / period, al = losses / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i-1];
+    ag = (ag * (period-1) + Math.max(d, 0)) / period;
+    al = (al * (period-1) + Math.max(-d, 0)) / period;
+  }
+  return al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+}
+
+async function bgRefreshAI(base44, cleanSym, isCrypto, livePrice, liveChange, cacheEntry) {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const from90 = now - 90 * 86400;
+
+    const [profile, recs, rsiData, newsData, metrics] = await Promise.all([
+      isCrypto ? null : fhGet(`/stock/profile2?symbol=${cleanSym}`),
+      isCrypto ? null : fhGet(`/stock/recommendation?symbol=${cleanSym}`),
+      isCrypto
+        ? cryptoRSI(cleanSym)
+        : fhGet(`/indicator?symbol=${cleanSym}&resolution=D&from=${from90}&to=${now}&indicator=rsi&timeperiod=14`).then(d => d?.rsi?.slice(-1)[0] ?? null),
+      isCrypto
+        ? null
+        : fhGet(`/company-news?symbol=${cleanSym}&from=${new Date(Date.now()-5*86400000).toISOString().slice(0,10)}&to=${new Date().toISOString().slice(0,10)}`).then(d => (d||[]).slice(0,3).map(a => a.headline)),
+      isCrypto ? null : fhGet(`/stock/basic-financials?symbol=${cleanSym}&metric=all`),
+    ]);
+
+    const rsi = typeof rsiData === 'number' ? rsiData : null;
+    const rec = recs?.[0];
+    const mcapRaw = profile?.marketCapitalization ? profile.marketCapitalization * 1e6 : null;
+
+    // Compact data for AI — token optimized, real values
+    const snap = {
+      p:   livePrice?.toFixed(2),
+      chg: `${liveChange?.toFixed(2)}%`,
+      rsi: rsi ? +rsi.toFixed(1) : 'N/A',
+      rsiCtx: rsi ? (rsi > 70 ? 'overbought' : rsi < 30 ? 'oversold' : 'neutral') : '',
+      rec: rec ? `${(rec.strongBuy||0)+(rec.buy||0)}B/${rec.hold||0}H/${(rec.strongSell||0)+(rec.sell||0)}S` : 'N/A',
+      sector: profile?.finnhubIndustry || (isCrypto ? 'Crypto' : 'Equity'),
+    };
+    if (newsData?.length) snap.news = newsData.map(h => h.slice(0, 80));
+
+    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      prompt: `Analyze ${cleanSym} using REAL live data: ${JSON.stringify(snap)}
+RSI is ${snap.rsiCtx || 'N/A'}. Analyst consensus: ${snap.rec}. ${snap.news ? `Recent headlines: ${JSON.stringify(snap.news)}` : ''}
+Give precise grounded analysis — no hallucination, use the numbers above.
+Output: signal(Strong Buy/Buy/Hold/Caution/Sell), confidence(0-100), 2-sentence summary, 6 indicator rows(RSI,MACD,Bollinger,SMA 50/200,Volume Trend,Stochastic) each with real-informed value+signal.`,
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          aiSignal:     { type: 'string' },
+          aiConfidence: { type: 'number' },
+          aiSummary:    { type: 'string' },
+          indicators:   { type: 'array', items: { type: 'object', properties: { name:{type:'string'}, value:{type:'string'}, signal:{type:'string'} } } }
+        }
+      }
+    });
+
+    const analysisData = {
+      name:         profile?.name || cleanSym,
+      sector:       profile?.finnhubIndustry || (isCrypto ? 'Crypto' : 'Equity'),
+      marketCap:    mcapRaw ? fmt(mcapRaw) : '—',
+      pe:           metrics?.metric?.peBasicExclExtraTTM?.toFixed(1) || '—',
+      volume:       metrics?.metric?.['10DayAverageTradingVolume'] ? fmt(metrics.metric['10DayAverageTradingVolume'] * 1e6) : '—',
+      high52:       metrics?.metric?.['52WeekHigh'] ?? null,
+      low52:        metrics?.metric?.['52WeekLow']  ?? null,
+      aiSignal:     aiResult.aiSignal,
+      aiConfidence: aiResult.aiConfidence,
+      aiSummary:    aiResult.aiSummary,
+      indicators:   aiResult.indicators || [],
+      analystRec:   rec ? { buy: (rec.strongBuy||0)+(rec.buy||0), hold: rec.hold||0, sell: (rec.strongSell||0)+(rec.sell||0) } : null,
+    };
+
+    const payload = { cache_key: `asset_${cleanSym}`, data: JSON.stringify(analysisData), refreshed_at: new Date().toISOString() };
+    if (cacheEntry) {
+      await base44.asServiceRole.entities.CachedData.update(cacheEntry.id, payload);
+    } else {
+      await base44.asServiceRole.entities.CachedData.create(payload);
+    }
+    return analysisData;
+  } catch (_) {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const { symbol } = await req.json();
     if (!symbol) return Response.json({ error: 'symbol required' }, { status: 400 });
 
-    const yahooSym = ['BTC','ETH','SOL','XRP'].includes(symbol) ? `${symbol}-USD` : symbol;
-    const cacheKey = `asset_${symbol}`;
+    const cleanSym = symbol.replace(/-USD$/i, '').toUpperCase();
+    const isCrypto = CRYPTO_SET.has(cleanSym);
+    const cacheKey = `asset_${cleanSym}`;
 
-    // Run cache lookup + live price fetch in parallel
-    const [cached, priceRes] = await Promise.all([
+    // Parallel: cache lookup + live price fetch
+    const pricePromise = isCrypto
+      ? fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${cleanSym}USDT`).then(r => r.json())
+      : fhGet(`/quote?symbol=${cleanSym}`);
+
+    const [rows, priceData] = await Promise.all([
       base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey }),
-      fetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=2d&interval=1d`,
-        { headers: HEADERS }
-      ).then(r => r.json()),
+      pricePromise,
     ]);
 
-    const cacheEntry = cached[0];
-    const cacheAge = cacheEntry ? Date.now() - new Date(cacheEntry.refreshed_at).getTime() : Infinity;
+    const cached    = rows[0];
+    const cacheAge  = cached ? Date.now() - new Date(cached.refreshed_at).getTime() : Infinity;
+    const livePrice = isCrypto ? parseFloat(priceData?.lastPrice || 0) : (priceData?.c || 0);
+    const liveChange = isCrypto ? parseFloat(priceData?.priceChangePercent || 0) : (priceData?.dp || 0);
 
-    const meta = priceRes?.chart?.result?.[0]?.meta || {};
-    const livePrice = meta.regularMarketPrice ?? meta.previousClose ?? null;
-    const liveChange = meta.regularMarketChangePercent ?? 0;
-
-    // If cache is fresh or stale-but-exists, return immediately with live price
-    if (cacheEntry) {
-      const cachedData = JSON.parse(cacheEntry.data);
-      const result = { ...cachedData, price: livePrice ?? cachedData.price ?? 0, change: liveChange };
-
-      // If stale, trigger background AI refresh (fire and forget)
-      if (cacheAge >= CACHE_TTL_MS) {
-        refreshAiCache(base44, symbol, yahooSym, meta, cacheEntry);
-      }
-
-      return Response.json(result);
+    // Fresh cache → return immediately
+    if (cached && cacheAge < CACHE_TTL_MS) {
+      const data = JSON.parse(cached.data);
+      return Response.json({ ...data, price: livePrice || data.price, change: liveChange });
     }
 
-    // Cold cache — must run AI synchronously
-    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Technical analysis for ${symbol} as of ${new Date().toDateString()}. Provide: overall signal (Strong Buy/Buy/Hold/Sell/Strong Sell), confidence% (0-100), 2-sentence summary, 6 indicator readings for RSI(14), MACD, Bollinger Bands, SMA 50/200, Volume Trend, Stochastic — each with value string and signal.`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          aiSignal:     { type: 'string' },
-          aiConfidence: { type: 'number' },
-          aiSummary:    { type: 'string' },
-          indicators: {
-            type: 'array',
-            items: { type: 'object', properties: { name: {type:'string'}, value: {type:'string'}, signal: {type:'string'} } }
-          }
-        }
-      }
-    });
+    // Stale cache → return stale immediately, refresh AI in background
+    if (cached && cacheAge >= CACHE_TTL_MS) {
+      const staleData = JSON.parse(cached.data);
+      bgRefreshAI(base44, cleanSym, isCrypto, livePrice, liveChange, cached);
+      return Response.json({ ...staleData, price: livePrice || staleData.price, change: liveChange });
+    }
 
-    const analysisData = {
-      name:         meta.shortName || meta.symbol || symbol,
-      sector:       meta.sector || (yahooSym.includes('-USD') ? 'Crypto' : 'Equity'),
-      marketCap:    meta.marketCap ? fmt(meta.marketCap) : '—',
-      pe:           meta.trailingPE ? meta.trailingPE.toFixed(1) : '—',
-      volume:       meta.regularMarketVolume ? fmt(meta.regularMarketVolume) : '—',
-      high52:       meta.fiftyTwoWeekHigh ?? null,
-      low52:        meta.fiftyTwoWeekLow ?? null,
-      aiSignal:     aiResult.aiSignal,
-      aiConfidence: aiResult.aiConfidence,
-      aiSummary:    aiResult.aiSummary,
-      indicators:   aiResult.indicators || [],
-    };
+    // Cold cache (first visit) — must run synchronously
+    const freshData = await bgRefreshAI(base44, cleanSym, isCrypto, livePrice, liveChange, null);
+    if (!freshData) return Response.json({ error: 'Analysis failed' }, { status: 502 });
 
-    // Save to cache
-    const payload = { cache_key: cacheKey, data: JSON.stringify(analysisData), refreshed_at: new Date().toISOString() };
-    base44.asServiceRole.entities.CachedData.create(payload);
-
-    return Response.json({ ...analysisData, price: livePrice ?? 0, change: liveChange });
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ ...freshData, price: livePrice, change: liveChange });
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
   }
 });
-
-async function refreshAiCache(base44, symbol, yahooSym, meta, cacheEntry) {
-  try {
-    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Technical analysis for ${symbol} as of ${new Date().toDateString()}. Provide: overall signal (Strong Buy/Buy/Hold/Sell/Strong Sell), confidence% (0-100), 2-sentence summary, 6 indicator readings for RSI(14), MACD, Bollinger Bands, SMA 50/200, Volume Trend, Stochastic — each with value string and signal.`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          aiSignal:     { type: 'string' },
-          aiConfidence: { type: 'number' },
-          aiSummary:    { type: 'string' },
-          indicators: {
-            type: 'array',
-            items: { type: 'object', properties: { name: {type:'string'}, value: {type:'string'}, signal: {type:'string'} } }
-          }
-        }
-      }
-    });
-
-    const analysisData = {
-      name:         meta.shortName || meta.symbol || symbol,
-      sector:       meta.sector || (yahooSym.includes('-USD') ? 'Crypto' : 'Equity'),
-      marketCap:    meta.marketCap ? fmt(meta.marketCap) : '—',
-      pe:           meta.trailingPE ? meta.trailingPE.toFixed(1) : '—',
-      volume:       meta.regularMarketVolume ? fmt(meta.regularMarketVolume) : '—',
-      high52:       meta.fiftyTwoWeekHigh ?? null,
-      low52:        meta.fiftyTwoWeekLow ?? null,
-      aiSignal:     aiResult.aiSignal,
-      aiConfidence: aiResult.aiConfidence,
-      aiSummary:    aiResult.aiSummary,
-      indicators:   aiResult.indicators || [],
-    };
-
-    await base44.asServiceRole.entities.CachedData.update(cacheEntry.id, {
-      cache_key: `asset_${symbol}`,
-      data: JSON.stringify(analysisData),
-      refreshed_at: new Date().toISOString(),
-    });
-  } catch (_) { /* background refresh — ignore errors */ }
-}

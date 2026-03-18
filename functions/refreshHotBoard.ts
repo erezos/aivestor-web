@@ -1,36 +1,38 @@
+// HotBoard refresh: Finnhub for stocks, Binance for crypto, AI for signals
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
-const HOT_SYMBOLS = ['NVDA','TSLA','AAPL','META','MSFT','AMZN','GOOGL','JPM','GS','AMD','BTC-USD','ETH-USD','SOL-USD','XRP-USD'];
-const HOT_META = {
-  'NVDA':    { name: 'NVIDIA Corp',    category: 'stock',  sector: 'Tech',    d: 'NVDA' },
-  'TSLA':    { name: 'Tesla Inc',      category: 'stock',  sector: 'Auto',    d: 'TSLA' },
-  'AAPL':    { name: 'Apple Inc',      category: 'stock',  sector: 'Tech',    d: 'AAPL' },
-  'META':    { name: 'Meta Platforms', category: 'stock',  sector: 'Tech',    d: 'META' },
-  'MSFT':    { name: 'Microsoft Corp', category: 'stock',  sector: 'Tech',    d: 'MSFT' },
-  'AMZN':    { name: 'Amazon.com',     category: 'stock',  sector: 'Tech',    d: 'AMZN' },
-  'GOOGL':   { name: 'Alphabet Inc',   category: 'stock',  sector: 'Tech',    d: 'GOOGL' },
-  'JPM':     { name: 'JPMorgan Chase', category: 'stock',  sector: 'Finance', d: 'JPM' },
-  'GS':      { name: 'Goldman Sachs',  category: 'stock',  sector: 'Finance', d: 'GS' },
-  'AMD':     { name: 'AMD Inc',        category: 'stock',  sector: 'Tech',    d: 'AMD' },
-  'BTC-USD': { name: 'Bitcoin',        category: 'crypto', sector: 'Crypto',  d: 'BTC' },
-  'ETH-USD': { name: 'Ethereum',       category: 'crypto', sector: 'Crypto',  d: 'ETH' },
-  'SOL-USD': { name: 'Solana',         category: 'crypto', sector: 'Crypto',  d: 'SOL' },
-  'XRP-USD': { name: 'Ripple',         category: 'crypto', sector: 'Crypto',  d: 'XRP' },
-};
+const FINNHUB_KEY = Deno.env.get('FINNHUB_API_KEY');
+
+const STOCKS = [
+  { symbol: 'NVDA',  name: 'NVIDIA Corp',    sector: 'Tech'    },
+  { symbol: 'TSLA',  name: 'Tesla Inc',       sector: 'Auto'    },
+  { symbol: 'AAPL',  name: 'Apple Inc',       sector: 'Tech'    },
+  { symbol: 'META',  name: 'Meta Platforms',  sector: 'Tech'    },
+  { symbol: 'MSFT',  name: 'Microsoft Corp',  sector: 'Tech'    },
+  { symbol: 'AMZN',  name: 'Amazon.com',      sector: 'Tech'    },
+  { symbol: 'GOOGL', name: 'Alphabet Inc',    sector: 'Tech'    },
+  { symbol: 'JPM',   name: 'JPMorgan Chase',  sector: 'Finance' },
+  { symbol: 'GS',    name: 'Goldman Sachs',   sector: 'Finance' },
+  { symbol: 'AMD',   name: 'AMD Inc',          sector: 'Tech'    },
+];
+
+const CRYPTOS = [
+  { symbol: 'BTC', name: 'Bitcoin',  bnSym: 'BTCUSDT' },
+  { symbol: 'ETH', name: 'Ethereum', bnSym: 'ETHUSDT' },
+  { symbol: 'SOL', name: 'Solana',   bnSym: 'SOLUSDT' },
+  { symbol: 'XRP', name: 'Ripple',   bnSym: 'XRPUSDT' },
+];
 
 function fmtPrice(n) {
-  if (!n && n !== 0) return '0.00';
-  return n >= 1000 ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : n.toFixed(2);
+  if (!n && n !== 0) return '—';
+  if (n >= 10000) return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n >= 1 ? n.toFixed(2) : n.toFixed(4);
 }
-function fmtChange(pct) {
-  const sign = pct >= 0 ? '+' : '';
-  return `${sign}${(pct || 0).toFixed(2)}%`;
-}
+function fmtChange(pct) { return `${pct >= 0 ? '+' : ''}${(pct || 0).toFixed(2)}%`; }
 function fmt(n) {
   if (!n) return '—';
-  if (n >= 1e12) return `${(n/1e12).toFixed(2)}T`;
-  if (n >= 1e9)  return `${(n/1e9).toFixed(2)}B`;
-  if (n >= 1e6)  return `${(n/1e6).toFixed(2)}M`;
+  if (n >= 1e9) return `${(n/1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${(n/1e6).toFixed(2)}M`;
   return n.toLocaleString();
 }
 
@@ -38,65 +40,58 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // Fetch live prices server-side using v8/chart (most reliable from server)
-    const HEADERS = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-    };
-    // Use 5d range so we have 2 closes to calculate % change accurately
-    const priceResults = await Promise.all(HOT_SYMBOLS.map(async sym => {
-      const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=5d&interval=1d`, { headers: HEADERS });
-      const json = await res.json();
-      const result = json?.chart?.result?.[0];
-      const meta   = result?.meta || {};
-      const closes = result?.indicators?.quote?.[0]?.close?.filter(v => v != null) || [];
-      const price  = meta.regularMarketPrice ?? closes[closes.length - 1] ?? 0;
-      const prev   = closes.length >= 2 ? closes[closes.length - 2] : (meta.previousClose ?? price);
-      const pct    = price && prev && prev !== 0 ? ((price - prev) / prev) * 100 : 0;
-      return { symbol: sym, regularMarketPrice: price, regularMarketChangePercent: pct, regularMarketVolume: meta.regularMarketVolume ?? 0 };
-    }));
-    const quotes = priceResults;
+    // Fetch all prices in parallel (Finnhub stocks + Binance crypto)
+    const [stockData, cryptoData] = await Promise.all([
+      Promise.all(STOCKS.map(async s => {
+        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${s.symbol}&token=${FINNHUB_KEY}`);
+        const d   = res.ok ? await res.json() : null;
+        return { ...s, category: 'stock', price: d?.c || 0, pct: d?.dp || 0, volume: 0 };
+      })),
+      Promise.all(CRYPTOS.map(async c => {
+        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${c.bnSym}`);
+        const d   = res.ok ? await res.json() : null;
+        return { ...c, category: 'crypto', sector: 'Crypto',
+          price:  d ? parseFloat(d.lastPrice)         : 0,
+          pct:    d ? parseFloat(d.priceChangePercent) : 0,
+          volume: d ? parseFloat(d.quoteVolume)        : 0,
+        };
+      })),
+    ]);
 
-    // Minimal AI prompt — just % changes → signals (no internet needed)
-    const priceData = HOT_SYMBOLS.map(sym => {
-      const q = quotes.find(r => r.symbol === sym);
-      return { s: HOT_META[sym].d, pct: +(q?.regularMarketChangePercent?.toFixed(2) ?? 0) };
-    });
+    const all = [...stockData, ...cryptoData];
+
+    // AI signal: real price moves → momentum signals (compact, token-efficient)
+    const priceFeed = all.map(a => ({ s: a.symbol, pct: +a.pct.toFixed(2), sector: a.sector || a.category }));
 
     const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Assets with daily % changes: ${JSON.stringify(priceData)}. For each, assign: signal (Strong Buy/Buy/Hold/Sell/Strong Sell) and aiScore (0-100) based on momentum. Return: {signals:[{s,signal,aiScore}]}`,
+      prompt: `Real market % changes today: ${JSON.stringify(priceFeed)}
+Assign signal(Strong Buy/Buy/Hold/Caution/Sell) and aiScore(0-100) per asset.
+Rules: momentum >+3% leans Buy/Strong Buy; <-3% leans Caution/Sell; crypto more volatile; sector context matters.
+Return {signals:[{s,signal,aiScore}]}`,
       response_json_schema: {
         type: 'object',
         properties: {
-          signals: {
-            type: 'array',
-            items: { type: 'object', properties: { s: {type:'string'}, signal: {type:'string'}, aiScore: {type:'number'} } }
-          }
+          signals: { type: 'array', items: { type: 'object', properties: { s:{type:'string'}, signal:{type:'string'}, aiScore:{type:'number'} } } }
         }
       }
     });
 
-    const signalMap = {};
-    (aiResult.signals || []).forEach(s => { signalMap[s.s] = s; });
+    const sigMap = {};
+    (aiResult.signals || []).forEach(s => { sigMap[s.s] = s; });
 
-    const result = HOT_SYMBOLS.map(sym => {
-      const q = quotes.find(r => r.symbol === sym);
-      const meta = HOT_META[sym];
-      const pct = q?.regularMarketChangePercent ?? 0;
-      const sig = signalMap[meta.d] || { signal: 'Hold', aiScore: 50 };
+    const result = all.map(a => {
+      const sig = sigMap[a.symbol] || { signal: 'Hold', aiScore: 50 };
       return {
-        symbol: meta.d, name: meta.name,
-        price: q ? fmtPrice(q.regularMarketPrice) : '—',
-        change: fmtChange(pct), positive: pct >= 0,
-        category: meta.category, sector: meta.sector,
-        volume: q?.regularMarketVolume ? fmt(q.regularMarketVolume) : '—',
+        symbol: a.symbol, name: a.name,
+        price: fmtPrice(a.price), change: fmtChange(a.pct), positive: a.pct >= 0,
+        category: a.category, sector: a.sector || 'Crypto',
+        volume: a.volume ? fmt(a.volume) : '—',
         signal: sig.signal, aiScore: sig.aiScore,
       };
     });
 
-    // Upsert cache
     const existing = await base44.asServiceRole.entities.CachedData.filter({ cache_key: 'hotboard' });
-    const payload = { cache_key: 'hotboard', data: JSON.stringify(result), refreshed_at: new Date().toISOString() };
+    const payload  = { cache_key: 'hotboard', data: JSON.stringify(result), refreshed_at: new Date().toISOString() };
     if (existing.length > 0) {
       await base44.asServiceRole.entities.CachedData.update(existing[0].id, payload);
     } else {
@@ -104,7 +99,7 @@ Deno.serve(async (req) => {
     }
 
     return Response.json({ success: true, count: result.length, refreshed_at: payload.refreshed_at });
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
   }
 });

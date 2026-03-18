@@ -1,9 +1,65 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
-const HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; AIVestor/1.0)' };
+const ALPACA_KEY    = Deno.env.get('ALPACA_API_KEY');
+const ALPACA_SECRET = Deno.env.get('ALPACA_API_SECRET');
+const ALPACA_HDR    = { 'APCA-API-KEY-ID': ALPACA_KEY, 'APCA-API-SECRET-KEY': ALPACA_SECRET };
 
-// Cache TTL per range
-const TTL = { '1d': 5, '5d': 15, '1mo': 60, '3mo': 120, '1y': 240 }; // minutes
+const CRYPTO_SET = new Set(['BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','DOT','MATIC','LINK','BNB']);
+
+// Alpaca: timeframe + lookback days per range
+const ALPACA_CFG = {
+  '1d':  { tf: '5Min',  days: 3   },
+  '5d':  { tf: '30Min', days: 8   },
+  '1mo': { tf: '1Day',  days: 35  },
+  '3mo': { tf: '1Day',  days: 95  },
+  '1y':  { tf: '1Day',  days: 370 },
+};
+
+// Binance: interval + limit per range
+const BINANCE_CFG = {
+  '1d':  { interval: '5m',  limit: 300 },
+  '5d':  { interval: '30m', limit: 250 },
+  '1mo': { interval: '1d',  limit: 32  },
+  '3mo': { interval: '1d',  limit: 92  },
+  '1y':  { interval: '1d',  limit: 366 },
+};
+
+// Cache TTL in minutes per range
+const TTL_MIN = { '1d': 5, '5d': 10, '1mo': 60, '3mo': 120, '1y': 240 };
+
+async function getAlpacaBars(symbol, range) {
+  const { tf, days } = ALPACA_CFG[range] || ALPACA_CFG['3mo'];
+  const start = new Date(Date.now() - days * 86400000).toISOString();
+  const url = `https://data.alpaca.markets/v2/stocks/${encodeURIComponent(symbol)}/bars?timeframe=${tf}&start=${start}&limit=1000&sort=asc`;
+  const res = await fetch(url, { headers: ALPACA_HDR });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return (json.bars || []).map(b => ({
+    time:   Math.floor(new Date(b.t).getTime() / 1000),
+    open:   +b.o.toFixed(4),
+    high:   +b.h.toFixed(4),
+    low:    +b.l.toFixed(4),
+    close:  +b.c.toFixed(4),
+    volume: b.v || 0,
+  }));
+}
+
+async function getBinanceBars(symbol, range) {
+  const { interval, limit } = BINANCE_CFG[range] || BINANCE_CFG['3mo'];
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const json = await res.json();
+  if (!Array.isArray(json)) return [];
+  return json.map(k => ({
+    time:   Math.floor(Number(k[0]) / 1000),
+    open:   +parseFloat(k[1]).toFixed(4),
+    high:   +parseFloat(k[2]).toFixed(4),
+    low:    +parseFloat(k[3]).toFixed(4),
+    close:  +parseFloat(k[4]).toFixed(4),
+    volume: +parseFloat(k[5]),
+  }));
+}
 
 Deno.serve(async (req) => {
   try {
@@ -11,45 +67,28 @@ Deno.serve(async (req) => {
     const { symbol, range = '3mo' } = await req.json();
     if (!symbol) return Response.json({ error: 'symbol required' }, { status: 400 });
 
-    const cacheKey = `chart_${symbol}_${range}`;
-    const ttlMs = (TTL[range] || 60) * 60 * 1000;
+    const cleanSym  = symbol.replace(/-USD$/i, '').toUpperCase();
+    const cacheKey  = `chart_${cleanSym}_${range}`;
+    const ttlMs     = (TTL_MIN[range] || 60) * 60000;
+    const isCrypto  = CRYPTO_SET.has(cleanSym);
 
     // Check cache first
-    const cached = await base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey });
-    const entry = cached[0];
-    if (entry && (Date.now() - new Date(entry.refreshed_at).getTime()) < ttlMs) {
+    const rows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey });
+    const entry = rows[0];
+    if (entry && Date.now() - new Date(entry.refreshed_at).getTime() < ttlMs) {
       return Response.json(JSON.parse(entry.data));
     }
 
-    // Fetch from Yahoo
-    const yahooSym = ['BTC','ETH','SOL','XRP','DOGE'].includes(symbol) ? `${symbol}-USD` : symbol;
-    const interval = range === '1d' ? '5m' : range === '5d' ? '30m' : '1d';
+    // Fetch from provider
+    const candles = isCrypto
+      ? await getBinanceBars(cleanSym, range)
+      : await getAlpacaBars(cleanSym, range);
 
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=${range}&interval=${interval}&events=history`,
-      { headers: HEADERS }
-    );
-    const json = await res.json();
-    const result = json?.chart?.result?.[0];
-    if (!result) return Response.json([]);
+    // Prefer stale cache over empty response (e.g. weekend / market closed)
+    if (!candles.length && entry) return Response.json(JSON.parse(entry.data));
+    if (!candles.length) return Response.json([]);
 
-    const ts = result.timestamp;
-    const q  = result.indicators.quote[0];
-    const candles = [];
-
-    for (let i = 0; i < ts.length; i++) {
-      if (!q.open[i] || !q.high[i] || !q.low[i] || !q.close[i]) continue;
-      candles.push({
-        time:   ts[i],
-        open:   parseFloat(q.open[i].toFixed(4)),
-        high:   parseFloat(q.high[i].toFixed(4)),
-        low:    parseFloat(q.low[i].toFixed(4)),
-        close:  parseFloat(q.close[i].toFixed(4)),
-        volume: q.volume[i] || 0,
-      });
-    }
-
-    // Save to cache (fire and forget)
+    // Persist cache (fire and forget)
     const payload = { cache_key: cacheKey, data: JSON.stringify(candles), refreshed_at: new Date().toISOString() };
     if (entry) {
       base44.asServiceRole.entities.CachedData.update(entry.id, payload);
@@ -58,7 +97,7 @@ Deno.serve(async (req) => {
     }
 
     return Response.json(candles);
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
   }
 });

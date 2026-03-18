@@ -1,41 +1,83 @@
+// Earnings calendar: real Finnhub data + AI volatility forecasts
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
+
+const FINNHUB_KEY = Deno.env.get('FINNHUB_API_KEY');
+
+const NOTABLE = new Set([
+  'AAPL','NVDA','MSFT','TSLA','META','AMZN','GOOGL','NFLX','AMD','INTC',
+  'JPM','GS','MS','BAC','WMT','COST','UBER','SNAP','PYPL','SQ','COIN',
+  'PLTR','V','MA','BABA','SHOP','CRM','ORCL','ADBE','QCOM','MU','ARM',
+]);
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Today is ${new Date().toDateString()}. List 14 most important upcoming US stock earnings reports in the next 3 weeks. For each: symbol, companyName, reportDate (YYYY-MM-DD), reportTime (BMO=before market open or AMC=after market close), epsEstimate (number USD), revenueEstimate (string e.g. "12.4B"), sector, volatilityForecast (Low/Medium/High), volatilityReason (8 words max), sentimentBias (bullish/bearish/neutral). Sort by reportDate ascending. Focus on: AAPL, NVDA, MSFT, TSLA, META, AMZN, GOOGL, AMD, NFLX, JPM, GS, etc.`,
-      add_context_from_internet: true,
-      model: 'gemini_3_flash',
+    const today    = new Date().toISOString().slice(0, 10);
+    const in3weeks = new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
+
+    // Real earnings calendar from Finnhub
+    const res  = await fetch(`https://finnhub.io/api/v1/calendar/earnings?from=${today}&to=${in3weeks}&token=${FINNHUB_KEY}`);
+    const json = res.ok ? await res.json() : null;
+    const calendar = json?.earningsCalendar || [];
+
+    // Filter to notable companies only, sort by date
+    const filtered = calendar
+      .filter(e => NOTABLE.has(e.symbol) && e.date)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, 20);
+
+    if (!filtered.length) {
+      // Nothing upcoming — keep cache as-is
+      return Response.json({ success: true, count: 0, note: 'No notable earnings in next 3 weeks' });
+    }
+
+    // Compact data for AI — real EPS/revenue estimates already provided
+    const compact = filtered.map(e => ({
+      sym:    e.symbol,
+      date:   e.date,
+      hour:   e.hour,
+      epsEst: e.epsEstimate ?? null,
+      revEst: e.revenueEstimate ? `${(e.revenueEstimate / 1e9).toFixed(1)}B` : null,
+    }));
+
+    // AI adds ONLY: volatility forecast + sentiment — the hard data is from Finnhub
+    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      prompt: `Upcoming earnings: ${JSON.stringify(compact)}
+For each symbol, provide: volatilityForecast(Low/Medium/High), volatilityReason(max 8 words), sentimentBias(bullish/bearish/neutral).
+Base on: company size, sector, recent trends, EPS trend.
+Return {analysis:[{sym,volatilityForecast,volatilityReason,sentimentBias}]}`,
       response_json_schema: {
         type: 'object',
         properties: {
-          earnings: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                symbol:             { type: 'string' },
-                companyName:        { type: 'string' },
-                reportDate:         { type: 'string' },
-                reportTime:         { type: 'string' },
-                epsEstimate:        { type: 'number' },
-                revenueEstimate:    { type: 'string' },
-                sector:             { type: 'string' },
-                volatilityForecast: { type: 'string' },
-                volatilityReason:   { type: 'string' },
-                sentimentBias:      { type: 'string' },
-              }
-            }
-          }
+          analysis: { type: 'array', items: { type: 'object', properties: { sym:{type:'string'}, volatilityForecast:{type:'string'}, volatilityReason:{type:'string'}, sentimentBias:{type:'string'} } } }
         }
       }
     });
 
-    const earnings = result.earnings || [];
+    const aiMap = {};
+    (aiResult.analysis || []).forEach(a => { aiMap[a.sym] = a; });
+
+    const earnings = filtered.map(e => {
+      const ai = aiMap[e.symbol] || { volatilityForecast: 'Medium', volatilityReason: 'Earnings season volatility expected', sentimentBias: 'neutral' };
+      return {
+        symbol:             e.symbol,
+        companyName:        e.symbol,
+        reportDate:         e.date,
+        reportTime:         e.hour === 'bmo' ? 'BMO' : e.hour === 'amc' ? 'AMC' : 'DMH',
+        epsEstimate:        e.epsEstimate    ?? null,
+        revenueEstimate:    e.revenueEstimate ? `${(e.revenueEstimate/1e9).toFixed(1)}B` : '—',
+        epsActual:          e.epsActual      ?? null,
+        revenueActual:      e.revenueActual  ?? null,
+        sector:             'N/A',
+        volatilityForecast: ai.volatilityForecast,
+        volatilityReason:   ai.volatilityReason,
+        sentimentBias:      ai.sentimentBias,
+      };
+    });
+
     const existing = await base44.asServiceRole.entities.CachedData.filter({ cache_key: 'earnings' });
-    const payload = { cache_key: 'earnings', data: JSON.stringify(earnings), refreshed_at: new Date().toISOString() };
+    const payload  = { cache_key: 'earnings', data: JSON.stringify(earnings), refreshed_at: new Date().toISOString() };
     if (existing.length > 0) {
       await base44.asServiceRole.entities.CachedData.update(existing[0].id, payload);
     } else {
@@ -43,7 +85,7 @@ Deno.serve(async (req) => {
     }
 
     return Response.json({ success: true, count: earnings.length, refreshed_at: payload.refreshed_at });
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
   }
 });
