@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
 
     if (type === 'indices') {
       const quotes = await Promise.all(
-        INDICES.map(idx => idx.src === 'bn' ? bnQuote(idx.sym) : fhQuote(idx.sym))
+        INDICES.map(idx => idx.src === 'cr' ? cryptoQuote(idx.sym) : fhQuote(idx.sym))
       );
       return Response.json(INDICES.map((idx, i) => {
         const q = quotes[i];
