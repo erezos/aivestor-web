@@ -34,21 +34,17 @@ export default function Asset() {
   });
 
   // Watchlist state
-  const { data: currentUser } = useQuery({
-    queryKey: ['me'],
-    queryFn: () => base44.auth.me(),
-  });
+  const deviceId = getDeviceId();
 
   const { data: watchlist = [] } = useQuery({
-    queryKey: ['watchlist', currentUser?.email],
-    queryFn: () => base44.entities.Watchlist.filter({ created_by: currentUser.email }, '-created_date'),
-    enabled: !!currentUser,
+    queryKey: ['watchlist', deviceId],
+    queryFn: () => base44.entities.Watchlist.filter({ device_id: deviceId }, '-created_date'),
   });
   const watchlistItem = watchlist.find(w => w.symbol === symbol);
   const isWatched = !!watchlistItem;
 
   const addToWatchlist = useMutation({
-    mutationFn: () => base44.entities.Watchlist.create({ symbol, name: asset?.name || symbol, asset_type: symbol.includes('-') || ['BTC','ETH','SOL','XRP'].includes(symbol) ? 'crypto' : 'stock' }),
+    mutationFn: () => base44.entities.Watchlist.create({ symbol, name: asset?.name || symbol, asset_type: symbol.includes('-') || ['BTC','ETH','SOL','XRP'].includes(symbol) ? 'crypto' : 'stock', device_id: deviceId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
   });
   const removeFromWatchlist = useMutation({
