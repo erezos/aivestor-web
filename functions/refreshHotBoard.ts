@@ -38,14 +38,18 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // Fetch live prices server-side (no CORS proxy needed)
-    const joined = HOT_SYMBOLS.join(',');
-    const priceRes = await fetch(
-      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${joined}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AIVestor/1.0)' } }
-    );
-    const priceJson = await priceRes.json();
-    const quotes = priceJson?.quoteResponse?.result || [];
+    // Fetch live prices server-side using v8/chart (most reliable from server)
+    const HEADERS = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+    };
+    const priceResults = await Promise.all(HOT_SYMBOLS.map(async sym => {
+      const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=2d&interval=1d`, { headers: HEADERS });
+      const json = await res.json();
+      const meta = json?.chart?.result?.[0]?.meta;
+      return { symbol: sym, regularMarketPrice: meta?.regularMarketPrice ?? meta?.previousClose ?? 0, regularMarketChangePercent: meta?.regularMarketChangePercent ?? 0, regularMarketVolume: meta?.regularMarketVolume ?? 0 };
+    }));
+    const quotes = priceResults;
 
     // Minimal AI prompt — just % changes → signals (no internet needed)
     const priceData = HOT_SYMBOLS.map(sym => {
