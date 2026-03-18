@@ -14,6 +14,17 @@ const TEST_DEFINITIONS = [
     if (!user?.email) throw new Error('No authenticated user');
   }),
 
+  makeTest('Watchlist: item is immediately visible after add (query key bug check)', async () => {
+    const user = await base44.auth.me();
+    const created = await base44.entities.Watchlist.create({ symbol: '__VIS_TEST__', name: 'Visibility Test', asset_type: 'stock' });
+    if (!created?.id) throw new Error('Create returned no id');
+    // Immediately re-fetch — simulates what the invalidated query does
+    const items = await base44.entities.Watchlist.filter({ created_by: user.email });
+    const found = items.find(i => i.id === created.id);
+    await base44.entities.Watchlist.delete(created.id);
+    if (!found) throw new Error(`Newly created item not found in user watchlist (created_by=${created.created_by}, user=${user.email})`);
+  }),
+
   makeTest('Watchlist: create, read and delete', async () => {
     const user = await base44.auth.me();
     const created = await base44.entities.Watchlist.create({
