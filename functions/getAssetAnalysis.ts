@@ -25,13 +25,25 @@ Deno.serve(async (req) => {
     const cacheEntry = cached[0];
     const cacheAge = cacheEntry ? Date.now() - new Date(cacheEntry.refreshed_at).getTime() : Infinity;
 
-    // Fetch live price always (fast, no AI)
+    // Fetch live price always (fast, no AI) — use v8/chart which is most reliable server-side
     const priceRes = await fetch(
-      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${yahooSym}`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=2d&interval=1d`,
       { headers: HEADERS }
     );
     const priceJson = await priceRes.json();
-    const q = priceJson?.quoteResponse?.result?.[0] || null;
+    const chartResult = priceJson?.chart?.result?.[0];
+    const meta = chartResult?.meta || {};
+    const q = {
+      regularMarketPrice:         meta.regularMarketPrice ?? meta.previousClose ?? null,
+      regularMarketChangePercent: meta.regularMarketChangePercent ?? 0,
+      shortName:                  meta.shortName || meta.symbol || yahooSym,
+      sector:                     meta.sector || null,
+      marketCap:                  meta.marketCap || null,
+      trailingPE:                 meta.trailingPE || null,
+      regularMarketVolume:        meta.regularMarketVolume || null,
+      fiftyTwoWeekHigh:           meta.fiftyTwoWeekHigh || null,
+      fiftyTwoWeekLow:            meta.fiftyTwoWeekLow || null,
+    };
 
     if (cacheAge < CACHE_TTL_MS && cacheEntry) {
       // Return cached AI analysis + fresh live price
