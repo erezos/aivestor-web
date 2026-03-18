@@ -54,7 +54,8 @@ export default function Watchlist() {
   const addMutation = useMutation({
     mutationFn: (data) => base44.entities.Watchlist.create(data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['watchlist', currentUser?.email] });
+      // Use prefix key so it matches regardless of whether currentUser is loaded
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
       setDialogOpen(false);
       setSearchQuery('');
       toast.success(`${variables.symbol} added to watchlist`);
@@ -67,7 +68,7 @@ export default function Watchlist() {
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Watchlist.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['watchlist', currentUser?.email] });
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
       toast.success('Removed from watchlist');
     },
     onError: () => toast.error('Failed to remove asset'),
