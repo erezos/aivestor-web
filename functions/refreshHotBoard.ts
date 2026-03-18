@@ -47,7 +47,12 @@ Deno.serve(async (req) => {
       const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=2d&interval=1d`, { headers: HEADERS });
       const json = await res.json();
       const meta = json?.chart?.result?.[0]?.meta;
-      return { symbol: sym, regularMarketPrice: meta?.regularMarketPrice ?? meta?.previousClose ?? 0, regularMarketChangePercent: meta?.regularMarketChangePercent ?? 0, regularMarketVolume: meta?.regularMarketVolume ?? 0 };
+      const price = meta?.regularMarketPrice ?? meta?.previousClose ?? 0;
+      const prev  = meta?.previousClose ?? 0;
+      const pct   = (meta?.regularMarketChangePercent != null && meta.regularMarketChangePercent !== 0)
+        ? meta.regularMarketChangePercent
+        : (price && prev ? ((price - prev) / prev) * 100 : 0);
+      return { symbol: sym, regularMarketPrice: price, regularMarketChangePercent: pct, regularMarketVolume: meta?.regularMarketVolume ?? 0 };
     }));
     const quotes = priceResults;
 
