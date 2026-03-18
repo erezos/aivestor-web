@@ -48,12 +48,17 @@ Deno.serve(async (req) => {
         return { ...s, category: 'stock', price: d?.c || 0, pct: d?.dp || 0, volume: 0 };
       })),
       Promise.all(CRYPTOS.map(async c => {
-        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${c.bnSym}`);
-        const d   = res.ok ? await res.json() : null;
+        // Use Finnhub for crypto (Binance geo-blocks cloud servers)
+        const sym = c.symbol;
+        const [res1, res2] = await Promise.all([
+          fetch(`https://finnhub.io/api/v1/quote?symbol=BINANCE:${c.bnSym}&token=${FINNHUB_KEY}`).then(r => r.json()),
+          fetch(`https://finnhub.io/api/v1/quote?symbol=COINBASE:${sym}USD&token=${FINNHUB_KEY}`).then(r => r.json()),
+        ]);
+        const d = res1?.c ? res1 : res2;
         return { ...c, category: 'crypto', sector: 'Crypto',
-          price:  d ? parseFloat(d.lastPrice)         : 0,
-          pct:    d ? parseFloat(d.priceChangePercent) : 0,
-          volume: d ? parseFloat(d.quoteVolume)        : 0,
+          price:  d?.c   || 0,
+          pct:    d?.dp  || 0,
+          volume: 0,
         };
       })),
     ]);
