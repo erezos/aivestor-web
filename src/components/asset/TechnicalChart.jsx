@@ -3,6 +3,7 @@ import { createChart, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { Zap, Loader2, BarChart2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
+
 async function fetchCandles(symbol, range = '3mo') {
   const res = await base44.functions.invoke('getChartData', { symbol, range });
   return res.data || [];
