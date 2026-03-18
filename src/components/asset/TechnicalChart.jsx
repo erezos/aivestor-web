@@ -3,31 +3,11 @@ import { createChart, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { Zap, Loader2, TrendingUp, BarChart2, Activity } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
-const PROXY = 'https://api.allorigins.win/raw?url=';
+import { base44 } from '@/api/base44Client';
 
 async function fetchCandles(symbol, range = '3mo') {
-  const yahooSym = ['BTC','ETH','SOL','XRP','DOGE'].includes(symbol) ? `${symbol}-USD` : symbol;
-  const interval = range === '1d' ? '5m' : range === '1wk' ? '30m' : '1d';
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=${range}&interval=${interval}&events=history`;
-  const res = await fetch(`${PROXY}${encodeURIComponent(url)}`);
-  const json = await res.json();
-  const result = json?.chart?.result?.[0];
-  if (!result) return [];
-  const ts = result.timestamp;
-  const q = result.indicators.quote[0];
-  const candles = [];
-  for (let i = 0; i < ts.length; i++) {
-    if (!q.open[i] || !q.high[i] || !q.low[i] || !q.close[i]) continue;
-    candles.push({
-      time: ts[i],
-      open: parseFloat(q.open[i].toFixed(4)),
-      high: parseFloat(q.high[i].toFixed(4)),
-      low: parseFloat(q.low[i].toFixed(4)),
-      close: parseFloat(q.close[i].toFixed(4)),
-      volume: q.volume[i] || 0,
-    });
-  }
-  return candles;
+  const res = await base44.functions.invoke('getChartData', { symbol, range });
+  return res.data || [];
 }
 
 function calcSMA(candles, period) {

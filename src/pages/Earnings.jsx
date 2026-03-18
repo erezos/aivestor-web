@@ -2,42 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CalendarDays, TrendingUp, TrendingDown, Zap, RefreshCw, Clock } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
-
-async function fetchEarningsWithForecasts() {
-  const result = await base44.integrations.Core.InvokeLLM({
-    prompt: `Today is ${new Date().toDateString()}. List the 14 most important upcoming US stock earnings reports in the next 3 weeks.
-For each, provide: symbol, companyName, reportDate (YYYY-MM-DD), reportTime (BMO=before market open or AMC=after market close), epsEstimate (number, USD), revenueEstimate (string, e.g. "12.4B"), sector, volatilityForecast (Low/Medium/High), volatilityReason (max 8 words), sentimentBias (bullish/bearish/neutral).
-Sort by reportDate ascending. Focus on high-profile names like AAPL, NVDA, MSFT, TSLA, META, AMZN, GOOGL, AMD, NFLX, JPM, etc.`,
-    add_context_from_internet: true,
-    model: 'gemini_3_flash',
-    response_json_schema: {
-      type: 'object',
-      properties: {
-        earnings: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              symbol: { type: 'string' },
-              companyName: { type: 'string' },
-              reportDate: { type: 'string' },
-              reportTime: { type: 'string' },
-              epsEstimate: { type: 'number' },
-              revenueEstimate: { type: 'string' },
-              sector: { type: 'string' },
-              volatilityForecast: { type: 'string' },
-              volatilityReason: { type: 'string' },
-              sentimentBias: { type: 'string' },
-            }
-          }
-        }
-      }
-    }
-  });
-  return result.earnings || [];
-}
+import { fetchEarnings } from '../components/marketData';
 
 const volatilityConfig = {
   High:   { color: 'text-rose-400',    bg: 'bg-rose-500/10 border-rose-500/20',    bar: 'bg-rose-400',    width: 'w-full' },
