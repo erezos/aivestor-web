@@ -103,6 +103,17 @@ export default function Layout() {
             })}
           </nav>
 
+          {isAdmin && (
+            <Link to="/TestSuite"
+              className={`hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                location.pathname === '/TestSuite'
+                  ? 'text-white bg-violet-500/10 border border-violet-500/20'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+              }`}
+            >
+              <FlaskConical className="w-4 h-4" /> Tests
+            </Link>
+          )}
           <div className="flex items-center gap-3">
             {/* Mobile App CTA */}
             <a
