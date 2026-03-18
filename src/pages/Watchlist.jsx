@@ -29,9 +29,15 @@ export default function Watchlist() {
   const [searchQuery, setSearchQuery] = useState('');
   const queryClient = useQueryClient();
 
+  const { data: currentUser } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => base44.auth.me(),
+  });
+
   const { data: watchlist = [], isLoading: watchlistLoading } = useQuery({
-    queryKey: ['watchlist'],
-    queryFn: () => base44.entities.Watchlist.list('-created_date'),
+    queryKey: ['watchlist', currentUser?.email],
+    queryFn: () => base44.entities.Watchlist.filter({ created_by: currentUser.email }, '-created_date'),
+    enabled: !!currentUser,
   });
 
   const symbols = watchlist.map(w => w.symbol);
