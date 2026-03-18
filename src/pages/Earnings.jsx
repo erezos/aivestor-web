@@ -52,7 +52,7 @@ export default function Earnings() {
 
   const { data: earnings = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['earnings'],
-    queryFn: fetchEarningsWithForecasts,
+    queryFn: fetchEarnings,
     staleTime: 30 * 60 * 1000,
     retry: 1,
   });
