@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Star, Plus, Trash2, TrendingUp, TrendingDown, Search } from 'lucide-react';
+import { Star, Plus, Trash2, TrendingUp, TrendingDown, Search, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchMultiQuote } from '../components/marketData';
