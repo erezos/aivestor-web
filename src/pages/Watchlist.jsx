@@ -8,6 +8,7 @@ import { fetchMultiQuote } from '../components/marketData';
 import { Link } from 'react-router-dom';
 import MiniChart from '../components/dashboard/MiniChart';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { getDeviceId } from '@/lib/useDeviceId';
 
 const POPULAR_SYMBOLS = [
   { symbol: 'AAPL', name: 'Apple Inc', type: 'stock' },
