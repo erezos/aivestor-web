@@ -163,29 +163,63 @@ export default function Asset() {
           )}
         </div>
 
-        {/* Key Stats */}
-        <div className="glass rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="w-4 h-4 text-violet-400" />
-            <h3 className="text-sm font-semibold text-white/80">Key Statistics</h3>
+        {/* Key Stats + Analyst Ratings */}
+        <div className="space-y-4">
+          <div className="glass rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart3 className="w-4 h-4 text-violet-400" />
+              <h3 className="text-sm font-semibold text-white/80">Key Statistics</h3>
+            </div>
+            {isLoading ? (
+              <div className="grid grid-cols-2 gap-3">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: 'Market Cap', value: asset?.marketCap },
+                  { label: 'P/E Ratio', value: asset?.pe },
+                  { label: 'Volume', value: asset?.volume },
+                  { label: '52W High', value: asset?.high52 ? `$${Number(asset.high52).toLocaleString()}` : '—' },
+                  { label: '52W Low', value: asset?.low52 ? `$${Number(asset.low52).toLocaleString()}` : '—' },
+                  { label: 'Sector', value: asset?.sector },
+                ].map(stat => (
+                  <div key={stat.label} className="glass rounded-xl p-3">
+                    <div className="text-[10px] text-white/30 mb-1">{stat.label}</div>
+                    <div className="text-sm font-semibold text-white">{stat.value || '—'}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          {isLoading ? (
-            <div className="grid grid-cols-2 gap-3">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'Market Cap', value: asset?.marketCap },
-                { label: 'P/E Ratio', value: asset?.pe },
-                { label: 'Volume', value: asset?.volume },
-                { label: '52W High', value: asset?.high52 ? `$${Number(asset.high52).toLocaleString()}` : '—' },
-                { label: '52W Low', value: asset?.low52 ? `$${Number(asset.low52).toLocaleString()}` : '—' },
-                { label: 'Sector', value: asset?.sector },
-              ].map(stat => (
-                <div key={stat.label} className="glass rounded-xl p-3">
-                  <div className="text-[10px] text-white/30 mb-1">{stat.label}</div>
-                  <div className="text-sm font-semibold text-white">{stat.value || '—'}</div>
-                </div>
-              ))}
+
+          {/* Analyst Consensus */}
+          {!isLoading && asset?.analystRec && (
+            <div className="glass rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Users className="w-4 h-4 text-violet-400" />
+                <h3 className="text-sm font-semibold text-white/80">Analyst Consensus</h3>
+                <span className="ml-auto text-[10px] text-white/20">Wall Street</span>
+              </div>
+              {(() => {
+                const { buy, hold, sell } = asset.analystRec;
+                const total = buy + hold + sell || 1;
+                const buyPct  = Math.round(buy  / total * 100);
+                const holdPct = Math.round(hold / total * 100);
+                const sellPct = Math.round(sell / total * 100);
+                return (
+                  <div className="space-y-3">
+                    <div className="flex rounded-lg overflow-hidden h-2.5">
+                      <div style={{ width: `${buyPct}%`  }} className="bg-emerald-500 transition-all" />
+                      <div style={{ width: `${holdPct}%` }} className="bg-amber-500 transition-all" />
+                      <div style={{ width: `${sellPct}%` }} className="bg-rose-500 transition-all" />
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-emerald-400 font-semibold">{buy} Buy</span>
+                      <span className="text-amber-400 font-semibold">{hold} Hold</span>
+                      <span className="text-rose-400 font-semibold">{sell} Sell</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
