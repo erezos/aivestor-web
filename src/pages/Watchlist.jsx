@@ -53,15 +53,24 @@ export default function Watchlist() {
 
   const addMutation = useMutation({
     mutationFn: (data) => base44.entities.Watchlist.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist', currentUser?.email] });
       setDialogOpen(false);
+      setSearchQuery('');
+      toast.success(`${variables.symbol} added to watchlist`);
+    },
+    onError: (err) => {
+      toast.error('Failed to add asset: ' + (err?.message || 'Unknown error'));
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Watchlist.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist', currentUser?.email] });
+      toast.success('Removed from watchlist');
+    },
+    onError: () => toast.error('Failed to remove asset'),
   });
 
   const [customLoading, setCustomLoading] = useState(false);
