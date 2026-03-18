@@ -3,8 +3,10 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, TrendingUp, Star, BookOpen, 
   Newspaper, Menu, X, Smartphone, ChevronRight,
-  PieChart, CalendarDays
+  PieChart, CalendarDays, FlaskConical
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const LOGO_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69b3e95402fa8b08d1ec8a16/d6018ef39_generated_image.png';
@@ -22,6 +24,8 @@ const navItems = [
 export default function Layout() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { data: currentUser } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
+  const isAdmin = currentUser?.role === 'admin';
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
