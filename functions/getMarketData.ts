@@ -14,12 +14,12 @@ async function fetchPrice(symbol) {
   const result = json?.chart?.result?.[0];
   if (!result) return null;
   const meta = result.meta;
-  return {
-    symbol,
-    price: meta?.regularMarketPrice ?? meta?.previousClose ?? null,
-    pct: meta?.regularMarketChangePercent ?? null,
-    prevClose: meta?.previousClose ?? null,
-  };
+  const price = meta?.regularMarketPrice ?? null;
+  const prev  = meta?.previousClose ?? null;
+  const pct   = (meta?.regularMarketChangePercent != null && meta.regularMarketChangePercent !== 0)
+    ? meta.regularMarketChangePercent
+    : (price && prev && prev !== 0 ? ((price - prev) / prev) * 100 : null);
+  return { symbol, price, pct, prevClose: prev };
 }
 
 // Fetch all symbols concurrently
