@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
 
     // Fetch from provider
     const candles = isCrypto
-      ? await getBinanceBars(cleanSym, range)
+      ? await getCryptoBars(cleanSym, range)
       : await getAlpacaBars(cleanSym, range);
 
     // Prefer stale cache over empty response (e.g. weekend / market closed)
