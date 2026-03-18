@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
+const FINNHUB_KEY   = Deno.env.get('FINNHUB_API_KEY');
 const ALPACA_KEY    = Deno.env.get('ALPACA_API_KEY');
 const ALPACA_SECRET = Deno.env.get('ALPACA_API_SECRET');
 const ALPACA_HDR    = { 'APCA-API-KEY-ID': ALPACA_KEY, 'APCA-API-SECRET-KEY': ALPACA_SECRET };
