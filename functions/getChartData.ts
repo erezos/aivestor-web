@@ -45,30 +45,23 @@ async function getAlpacaBars(symbol, range) {
   }));
 }
 
-// Crypto chart via Finnhub candles (Binance geo-blocks cloud IPs)
+// Crypto chart via Alpaca crypto endpoint (v1beta3)
 async function getCryptoBars(symbol, range) {
-  const days = { '1d': 2, '5d': 8, '1mo': 35, '3mo': 95, '1y': 370 }[range] || 95;
-  const res  = { '1d': 'D', '5d': 'D', '1mo': 'D', '3mo': 'D', '1y': 'W' }[range] || 'D';
-  const now  = Math.floor(Date.now() / 1000);
-  const from = now - days * 86400;
-
-  // Try BINANCE: prefix, then COINBASE:
-  const tryFetch = async (fhSym) => {
-    const url = `https://finnhub.io/api/v1/crypto/candle?symbol=${fhSym}&resolution=${res}&from=${from}&to=${now}&token=${FINNHUB_KEY}`;
-    const r   = await fetch(url);
-    const j   = r.ok ? await r.json() : null;
-    return j?.s === 'ok' && j.c?.length ? j : null;
-  };
-
-  const d = await tryFetch(`BINANCE:${symbol}USDT`) || await tryFetch(`COINBASE:${symbol}USD`);
-  if (!d) return [];
-  return d.t.map((ts, i) => ({
-    time:   ts,
-    open:   +d.o[i].toFixed(4),
-    high:   +d.h[i].toFixed(4),
-    low:    +d.l[i].toFixed(4),
-    close:  +d.c[i].toFixed(4),
-    volume: d.v[i] || 0,
+  const { tf, days } = ALPACA_CFG[range] || ALPACA_CFG['3mo'];
+  const start = new Date(Date.now() - days * 86400000).toISOString();
+  const alpacaSym = `${symbol}/USD`;
+  const url = `https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=${encodeURIComponent(alpacaSym)}&timeframe=${tf}&start=${start}&limit=1000&sort=asc`;
+  const res = await fetch(url, { headers: ALPACA_HDR });
+  if (!res.ok) return [];
+  const json = await res.json();
+  const bars = json.bars?.[alpacaSym] || [];
+  return bars.map(b => ({
+    time:   Math.floor(new Date(b.t).getTime() / 1000),
+    open:   +b.o.toFixed(4),
+    high:   +b.h.toFixed(4),
+    low:    +b.l.toFixed(4),
+    close:  +b.c.toFixed(4),
+    volume: b.v || 0,
   }));
 }
 
