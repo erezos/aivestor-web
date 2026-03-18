@@ -55,7 +55,7 @@ const TRENDING = [
   { symbol: 'AAPL',  name: 'Apple Inc',       src: 'fh', sym: 'AAPL'   },
   { symbol: 'META',  name: 'Meta Platforms',  src: 'fh', sym: 'META'   },
   { symbol: 'MSFT',  name: 'Microsoft Corp',  src: 'fh', sym: 'MSFT'   },
-  { symbol: 'BTC',   name: 'Bitcoin',         src: 'bn', sym: 'BTCUSDT'},
+  { symbol: 'BTC',   name: 'Bitcoin',         src: 'cr', sym: 'BTCUSDT'},
   { symbol: 'AMZN',  name: 'Amazon.com',      src: 'fh', sym: 'AMZN'   },
   { symbol: 'GOOGL', name: 'Alphabet Inc',    src: 'fh', sym: 'GOOGL'  },
 ];
