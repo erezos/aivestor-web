@@ -201,23 +201,29 @@ export default function Watchlist() {
               />
             </div>
             <div className="space-y-1 max-h-60 overflow-y-auto">
-              {filteredSymbols.map(s => (
-                <button key={s.symbol}
-                  onClick={() => addMutation.mutate({ symbol: s.symbol, name: s.name, asset_type: s.type })}
-                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-all"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
-                      <span className="text-xs font-bold text-violet-300">{s.symbol.slice(0,2)}</span>
+              {filteredSymbols.map(s => {
+                const isAdding = addMutation.isPending && addMutation.variables?.symbol === s.symbol;
+                return (
+                  <button key={s.symbol}
+                    onClick={() => addMutation.mutate({ symbol: s.symbol, name: s.name, asset_type: s.type })}
+                    disabled={addMutation.isPending}
+                    className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-all disabled:opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
+                        <span className="text-xs font-bold text-violet-300">{s.symbol.slice(0,2)}</span>
+                      </div>
+                      <div className="text-left">
+                        <div className="text-sm font-semibold">{s.symbol}</div>
+                        <div className="text-[11px] text-white/30">{s.name}</div>
+                      </div>
                     </div>
-                    <div className="text-left">
-                      <div className="text-sm font-semibold">{s.symbol}</div>
-                      <div className="text-[11px] text-white/30">{s.name}</div>
-                    </div>
-                  </div>
-                  <Plus className="w-4 h-4 text-white/30" />
-                </button>
-              ))}
+                    {isAdding
+                      ? <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />
+                      : <Plus className="w-4 h-4 text-white/30" />}
+                  </button>
+                );
+              })}
               {filteredSymbols.length === 0 && !showCustomAdd && <p className="text-center text-white/30 text-sm py-6">No more symbols to add</p>}
               {showCustomAdd && (
                 <button
