@@ -72,7 +72,7 @@ export default function Asset() {
     else addToWatchlist.mutate();
   };
 
-  const positive = asset ? asset.change >= 0 : true;
+  const positive = displayChange != null ? displayChange >= 0 : true;
 
   return (
     <div className="space-y-5 pb-20 md:pb-6">
