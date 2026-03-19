@@ -127,53 +127,6 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="md:hidden fixed inset-x-0 top-14 z-40 glass border-b border-white/5 p-4"
-          >
-            <nav className="flex flex-col gap-1">
-              {navItems.map(item => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                      isActive
-                        ? 'bg-violet-500/10 text-violet-300 border border-violet-500/20'
-                        : 'text-white/60 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <item.icon className="w-4 h-4" />
-                      {item.label}
-                    </div>
-                    <ChevronRight className="w-4 h-4 opacity-30" />
-                  </Link>
-                );
-              })}
-            </nav>
-            <div className="mt-4 pt-4 border-t border-white/5">
-              <a
-                href="https://apps.apple.com/us/app/technical-analysis-ai/id6746874804"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold"
-              >
-                <Smartphone className="w-4 h-4" />
-                Download Mobile App
-              </a>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-4 py-6">
         <Outlet />
