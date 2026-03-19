@@ -7,6 +7,7 @@ const TOP_ASSETS = [
   'JPM', 'SPY', 'QQQ', 'NFLX', 'PLTR', 'COIN',
   'BTC', 'ETH', 'SOL', 'XRP',
 ];
+const CHART_RANGES = ['3mo', '1mo'];
 
 Deno.serve(async (req) => {
   try {
