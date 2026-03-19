@@ -106,19 +106,19 @@ export default function Asset() {
           </div>
         </div>
 
-        {/* Price */}
+        {/* Price — loads fast independently from AI analysis */}
         <div className="mt-4">
-          {isLoading ? (
+          {!priceReady ? (
             <div className="space-y-2">
               <Skeleton className="h-10 w-48" />
               <Skeleton className="h-5 w-24" />
             </div>
           ) : (
             <>
-              <span className="text-4xl font-bold text-white">${asset?.price?.toLocaleString()}</span>
+              <span className="text-4xl font-bold text-white">${displayPrice?.toLocaleString()}</span>
               <div className={`flex items-center gap-1 mt-1 text-sm font-semibold ${positive ? 'text-gain' : 'text-loss'}`}>
                 {positive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                {positive ? '+' : ''}{asset?.change?.toFixed(2)}%
+                {positive ? '+' : ''}{Math.abs(displayChange ?? 0).toFixed(2)}%
               </div>
             </>
           )}
