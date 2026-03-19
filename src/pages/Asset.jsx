@@ -8,6 +8,7 @@ import { base44 } from '@/api/base44Client';
 import { fetchAssetData, fetchMultiQuote } from '../components/marketData';
 import { getDeviceId } from '@/lib/useDeviceId';
 import TechnicalChart from '../components/asset/TechnicalChart';
+import RelatedArticles from '../components/asset/RelatedArticles';
 
 
 
