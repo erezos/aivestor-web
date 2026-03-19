@@ -26,12 +26,27 @@ export default function Asset() {
   const symbol = urlParams.get('symbol') || 'AAPL';
   const queryClient = useQueryClient();
 
+  // Fast price query — loads in ~300ms independently
+  const { data: priceData } = useQuery({
+    queryKey: ['price', symbol],
+    queryFn: () => fetchMultiQuote([symbol]),
+    staleTime: 60 * 1000,
+    retry: 1,
+  });
+  const liveQuote = priceData?.[symbol];
+
+  // Heavy AI analysis — loads separately, shows skeleton until ready
   const { data: asset, isLoading } = useQuery({
     queryKey: ['asset', symbol],
     queryFn: () => fetchAssetData(symbol),
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
+
+  // Merge: use live price if available (faster), fall back to asset data
+  const displayPrice = liveQuote?.price ?? asset?.price;
+  const displayChange = liveQuote ? (liveQuote.positive ? Math.abs(parseFloat(liveQuote.change)) : -Math.abs(parseFloat(liveQuote.change))) : asset?.change;
+  const priceReady = displayPrice != null;
 
   // Watchlist state
   const deviceId = getDeviceId();
