@@ -18,22 +18,37 @@ Deno.serve(async (req) => {
     }
 
     const results = [];
-    // Process in batches of 3 to avoid rate limits
+
+    // 1. Pre-warm AI analysis (batches of 3)
     for (let i = 0; i < TOP_ASSETS.length; i += 3) {
       const batch = TOP_ASSETS.slice(i, i + 3);
       await Promise.all(batch.map(async (symbol) => {
         try {
           await base44.functions.invoke('getAssetAnalysis', { symbol });
-          results.push({ symbol, status: 'ok' });
+          results.push({ symbol, type: 'analysis', status: 'ok' });
         } catch (e) {
-          results.push({ symbol, status: 'error', error: e.message });
+          results.push({ symbol, type: 'analysis', status: 'error', error: e.message });
         }
       }));
-      // Small delay between batches to respect rate limits
-      if (i + 3 < TOP_ASSETS.length) await new Promise(r => setTimeout(r, 1000));
+      if (i + 3 < TOP_ASSETS.length) await new Promise(r => setTimeout(r, 800));
     }
 
-    return Response.json({ warmed: results.length, results });
+    // 2. Pre-warm charts for default ranges (batches of 5 — lighter calls)
+    const chartJobs = TOP_ASSETS.flatMap(symbol => CHART_RANGES.map(range => ({ symbol, range })));
+    for (let i = 0; i < chartJobs.length; i += 5) {
+      const batch = chartJobs.slice(i, i + 5);
+      await Promise.all(batch.map(async ({ symbol, range }) => {
+        try {
+          await base44.functions.invoke('getChartData', { symbol, range });
+          results.push({ symbol, type: `chart_${range}`, status: 'ok' });
+        } catch (e) {
+          results.push({ symbol, type: `chart_${range}`, status: 'error', error: e.message });
+        }
+      }));
+      if (i + 5 < chartJobs.length) await new Promise(r => setTimeout(r, 500));
+    }
+
+    return Response.json({ warmed: results.filter(r => r.status === 'ok').length, total: results.length, results });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
