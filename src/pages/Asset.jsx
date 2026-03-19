@@ -218,6 +218,9 @@ export default function Asset() {
         </div>
       </div>
 
+      {/* Related Articles */}
+      <RelatedArticles symbol={symbol} />
+
       {/* Trade CTA */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
         className="glass rounded-2xl p-5 text-center border border-violet-500/10"
