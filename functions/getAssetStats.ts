@@ -49,9 +49,11 @@ async function alpacaStats(symbol) {
   const json  = await safeJson(url, ALPACA_HDR);
   const bars  = json?.bars || [];
   if (!bars.length) return null;
-  const high52 = Math.max(...bars.map(b => b.h));
-  const low52  = Math.min(...bars.map(b => b.l));
-  const volume = bars.slice(-10).reduce((s, b) => s + b.v, 0) / Math.min(bars.length, 10);
+  const high52  = Math.max(...bars.map(b => b.h));
+  const low52   = Math.min(...bars.map(b => b.l));
+  // 10-day average volume from the most recent bars
+  const recent  = bars.slice(-10);
+  const volume  = recent.reduce((s, b) => s + (b.v || 0), 0) / recent.length;
   return { high52, low52, volume };
 }
 
