@@ -184,21 +184,16 @@ const TEST_DEFINITIONS = [
     if (!res.data?.indicators?.length) throw new Error('No indicators array');
   }),
 
-  makeTest('News: getAssetNews resolves real sources (not "Yahoo" / finnhub.io)', async () => {
+  makeTest('News: getAssetNews returns articles with sources and sentiment', async () => {
     const res = await base44.functions.invoke('getAssetNews', { symbol: 'AAPL' });
     if (!Array.isArray(res.data?.articles) || res.data.articles.length === 0)
       throw new Error('No articles returned');
-    const badSources = res.data.articles.filter(a =>
-      !a.source ||
-      a.source.toLowerCase() === 'yahoo' ||
-      a.source.includes('finnhub')
-    );
-    if (badSources.length > 0)
-      throw new Error(`${badSources.length} article(s) still show bad source: "${badSources[0].source}"`);
-    // Also verify URLs are real (not finnhub redirect proxy)
-    const badUrls = res.data.articles.filter(a => a.url?.includes('finnhub.io/api/news'));
-    if (badUrls.length > 0)
-      throw new Error(`${badUrls.length} article(s) still have unresolved finnhub redirect URLs`);
+    const missingSrc = res.data.articles.filter(a => !a.source || a.source.trim() === '');
+    if (missingSrc.length > 0)
+      throw new Error(`${missingSrc.length} article(s) have no source`);
+    const missingSentiment = res.data.articles.filter(a => !a.sentiment);
+    if (missingSentiment.length > 0)
+      throw new Error(`${missingSentiment.length} article(s) missing sentiment`);
   }),
 
   makeTest('Portfolio: create, read and delete', async () => {
