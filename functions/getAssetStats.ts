@@ -24,7 +24,10 @@ async function fhGet(path) {
   try {
     const sep = path.includes('?') ? '&' : '?';
     const res = await fetch(`https://finnhub.io/api/v1${path}${sep}token=${FINNHUB_KEY}`);
-    return res.ok ? res.json() : null;
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text || text.trim().startsWith('<')) return null;
+    return JSON.parse(text);
   } catch { return null; }
 }
 
