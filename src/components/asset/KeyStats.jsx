@@ -1,37 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const LOADERS = [
-  { label: 'Scanning fundamentals', color: 'from-violet-500 to-fuchsia-500' },
-  { label: 'Fetching metrics', color: 'from-cyan-500 to-blue-500' },
-  { label: 'Crunching numbers', color: 'from-amber-500 to-orange-500' },
-  { label: 'Analyzing data', color: 'from-emerald-500 to-teal-500' },
-  { label: 'Almost there', color: 'from-pink-500 to-rose-500' },
-  { label: 'Pulling stats', color: 'from-indigo-500 to-violet-500' },
-];
+// Ambient scanner: random chars that slowly cycle — calm, never looks "stuck"
+const SCAN_CHARS = '0123456789ABCDEF.$%';
+function randomChar() { return SCAN_CHARS[Math.floor(Math.random() * SCAN_CHARS.length)]; }
 
-function StatLoader({ index }) {
-  const cfg = LOADERS[index % LOADERS.length];
+function ScanLoader() {
+  const [chars, setChars] = useState(() => Array.from({ length: 6 }, randomChar));
+
+  useEffect(() => {
+    // Replace one random char at a time, slowly — calm rhythm
+    const id = setInterval(() => {
+      setChars(prev => {
+        const next = [...prev];
+        const i = Math.floor(Math.random() * next.length);
+        next[i] = randomChar();
+        return next;
+      });
+    }, 200);
+    return () => clearInterval(id);
+  }, []);
+
   return (
-    <div className="glass rounded-xl p-3 overflow-hidden relative">
-      <div className="text-[10px] text-white/25 mb-2">{cfg.label}…</div>
-      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-        <motion.div
-          className={`h-full rounded-full bg-gradient-to-r ${cfg.color}`}
-          initial={{ x: '-100%' }}
-          animate={{ x: '100%' }}
-          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut', delay: index * 0.18 }}
-        />
+    <div className="glass rounded-xl p-3 relative overflow-hidden group">
+      {/* Gentle ambient glow pulse — very slow, not demanding */}
+      <motion.div
+        className="absolute inset-0 rounded-xl bg-violet-500/5"
+        animate={{ opacity: [0, 0.4, 0] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <div className="text-[10px] text-white/20 mb-1.5 font-mono tracking-widest">SCANNING</div>
+      <div className="flex gap-0.5">
+        {chars.map((c, i) => (
+          <span
+            key={i}
+            className="text-[11px] font-mono font-bold text-violet-400/40"
+            style={{ transition: 'opacity 0.15s', opacity: 0.3 + Math.random() * 0.5 }}
+          >
+            {c}
+          </span>
+        ))}
       </div>
     </div>
   );
 }
 
-function StatCell({ label, value, index }) {
-  if (value == null) return <StatLoader index={index} />;
+function StatCell({ label, value, isLoading }) {
+  // Show scanner only while request is in flight
+  if (isLoading) return <ScanLoader />;
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -40,7 +60,9 @@ function StatCell({ label, value, index }) {
       className="glass rounded-xl p-3"
     >
       <div className="text-[10px] text-white/30 mb-1">{label}</div>
-      <div className="text-sm font-semibold text-white">{value}</div>
+      <div className="text-sm font-semibold text-white">
+        {value ?? <span className="text-white/20 font-normal">N/A</span>}
+      </div>
     </motion.div>
   );
 }
@@ -68,12 +90,18 @@ export default function KeyStats({ symbol }) {
         <BarChart3 className="w-4 h-4 text-violet-400" />
         <h3 className="text-sm font-semibold text-white/80">Key Statistics</h3>
         {isLoading && (
-          <span className="ml-auto text-[10px] text-violet-400/60 animate-pulse">Loading…</span>
+          <motion.span
+            className="ml-auto text-[10px] font-mono text-violet-400/40"
+            animate={{ opacity: [0.3, 0.8, 0.3] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            SCANNING…
+          </motion.span>
         )}
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {rows.map((row, i) => (
-          <StatCell key={row.label} label={row.label} value={row.value} index={i} />
+        {rows.map((row) => (
+          <StatCell key={row.label} label={row.label} value={row.value} isLoading={isLoading} />
         ))}
       </div>
     </div>
