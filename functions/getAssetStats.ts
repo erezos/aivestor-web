@@ -104,23 +104,21 @@ async function geckoStats(symbol) {
 
 // ─── Build stock stats: Alpaca is guaranteed, Finnhub is best-effort ──────────
 async function buildStockStats(symbol) {
-  // Fire Alpaca (reliable) + Finnhub profile in parallel — only 1 Finnhub call
-  const [alpaca, profile, metrics] = await Promise.all([
+  // Alpaca bars (reliable, 100% works) + Finnhub profile + PE in parallel
+  const [alpaca, profile, pe] = await Promise.all([
     alpacaStats(symbol),
     finnhubProfile(symbol),
-    finnhubMetrics(symbol),
+    finnhubPE(symbol),
   ]);
 
-  // 52W: Alpaca wins (calculated from actual bars), Finnhub as fallback
-  const high52 = alpaca?.high52 ?? metrics?.high52 ?? null;
-  const low52  = alpaca?.low52  ?? metrics?.low52  ?? null;
+  // 52W + volume: guaranteed from Alpaca bars
+  const high52 = alpaca?.high52 ?? null;
+  const low52  = alpaca?.low52  ?? null;
   const volume = alpaca?.volume ?? null;
 
-  // Fundamentals from Finnhub (best effort)
-  const pe      = metrics?.pe != null ? (metrics.pe <= 0 ? 'N/A' : metrics.pe.toFixed(1)) : null;
-  const mcap    = profile?.mcap ?? null;
-  const sector  = profile?.sector ?? null;
-  const name    = profile?.name   ?? symbol;
+  const mcap   = profile?.mcap   ?? null;
+  const sector = profile?.sector ?? null;
+  const name   = profile?.name   ?? symbol;
 
   return {
     name, sector,
