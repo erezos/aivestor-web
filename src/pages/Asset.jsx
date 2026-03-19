@@ -4,7 +4,7 @@ import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, BarChart3, User
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { fetchAssetData } from '../components/marketData';
+import { fetchAssetData, fetchMultiQuote } from '../components/marketData';
 import { getDeviceId } from '@/lib/useDeviceId';
 import TechnicalChart from '../components/asset/TechnicalChart';
 
