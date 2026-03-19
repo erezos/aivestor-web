@@ -18,7 +18,7 @@ async function fhGet(path) {
 async function resolveRedirect(url) {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
+    const timer = setTimeout(() => controller.abort(), 1500);
     const res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
     clearTimeout(timer);
     return res.url || url;
