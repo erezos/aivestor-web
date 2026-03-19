@@ -22,7 +22,6 @@ const navItems = [
 
 export default function Layout() {
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { data: currentUser } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
   const isAdmin = currentUser?.role === 'admin';
 
