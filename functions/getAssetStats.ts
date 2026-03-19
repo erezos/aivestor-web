@@ -1,4 +1,4 @@
-// Fast key statistics — Finnhub + Yahoo Finance fallback, no AI. Cached 1hr.
+// Fast key statistics — Finnhub + Yahoo Finance v7, cached 1hr, no AI.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
 const FINNHUB_KEY = Deno.env.get('FINNHUB_API_KEY');
@@ -22,7 +22,7 @@ function fmt(n) {
 
 async function safeJson(url, headers = {}) {
   try {
-    const res = await fetch(url, { headers });
+    const res = await fetch(url, { headers: { 'Accept': 'application/json', ...headers } });
     if (!res.ok) return null;
     const text = await res.text();
     if (!text || text.trim().startsWith('<')) return null;
@@ -35,77 +35,50 @@ async function fhGet(path) {
   return safeJson(`https://finnhub.io/api/v1${path}${sep}token=${FINNHUB_KEY}`);
 }
 
-// Yahoo Finance v8 — no auth needed
-async function yahooStats(symbol) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y&includePrePost=false`;
+// Yahoo Finance v7 quote — works without auth
+async function yahooQuote(symbol) {
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}&fields=regularMarketPrice,regularMarketVolume,averageDailyVolume3Month,trailingPE,forwardPE,marketCap,fiftyTwoWeekHigh,fiftyTwoWeekLow,shortName,longName,sector,industry`;
   const data = await safeJson(url, {
-    'User-Agent': 'Mozilla/5.0 (compatible; AIVestor/1.0)',
-    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0',
+    'Referer': 'https://finance.yahoo.com',
   });
-  const meta = data?.chart?.result?.[0]?.meta;
-  if (!meta) return null;
-  return meta;
-}
-
-// Yahoo Finance v10 quoteSummary
-async function yahooSummary(symbol) {
-  const modules = 'summaryDetail,defaultKeyStatistics,price';
-  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${encodeURIComponent(modules)}&corsDomain=finance.yahoo.com`;
-  const data = await safeJson(url, {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'application/json',
-    'Referer': 'https://finance.yahoo.com/',
-  });
-  const result = data?.quoteSummary?.result?.[0];
-  if (!result) return null;
-  return result;
+  return data?.quoteResponse?.result?.[0] ?? null;
 }
 
 async function getStockStats(symbol) {
-  const [profile, metrics, quote, yahooChart, yahooSumm] = await Promise.all([
+  const [fhProfile, fhMetrics, fhQuote, yQuote] = await Promise.all([
     fhGet(`/stock/profile2?symbol=${symbol}`),
     fhGet(`/stock/basic-financials?symbol=${symbol}&metric=all`),
     fhGet(`/quote?symbol=${symbol}`),
-    yahooStats(symbol),
-    yahooSummary(symbol),
+    yahooQuote(symbol),
   ]);
 
-  const m = metrics?.metric || {};
-  const sd = yahooSumm?.summaryDetail || {};
-  const ks = yahooSumm?.defaultKeyStatistics || {};
-  const yp = yahooSumm?.price || {};
+  const m  = fhMetrics?.metric || {};
 
-  // Market Cap
-  let mcap = null;
-  if (yp?.marketCap?.raw) mcap = yp.marketCap.raw;
-  else if (profile?.marketCapitalization) mcap = profile.marketCapitalization * 1e6;
-  else if (profile?.shareOutstanding && quote?.c) mcap = profile.shareOutstanding * 1e6 * quote.c;
+  // Market Cap — Yahoo first (live), then Finnhub profile
+  const mcap =
+    yQuote?.marketCap ??
+    (fhProfile?.marketCapitalization ? fhProfile.marketCapitalization * 1e6 : null) ??
+    (fhProfile?.shareOutstanding && fhQuote?.c ? fhProfile.shareOutstanding * 1e6 * fhQuote.c : null);
 
-  // P/E ratio — try Yahoo first (more reliable), then Finnhub
-  let peRaw = sd?.trailingPE?.raw ?? sd?.forwardPE?.raw ?? m.peBasicExclExtraTTM ?? m.peTTM ?? null;
+  // P/E — Yahoo trailing > forward, then Finnhub
+  const peRaw = yQuote?.trailingPE ?? yQuote?.forwardPE ?? m.peBasicExclExtraTTM ?? m.peTTM ?? null;
   const pe = peRaw != null ? (peRaw <= 0 ? 'N/A' : peRaw.toFixed(1)) : null;
 
-  // Volume — Yahoo's regular market volume
-  const vol = sd?.averageVolume?.raw ?? sd?.averageVolume10days?.raw ?? m['10DayAverageTradingVolume'] * 1e6 ?? null;
+  // Volume — Yahoo 3-month avg, then Finnhub
+  const vol =
+    yQuote?.averageDailyVolume3Month ??
+    yQuote?.regularMarketVolume ??
+    (m['10DayAverageTradingVolume'] ? m['10DayAverageTradingVolume'] * 1e6 : null);
 
-  // 52W
-  const high52 = sd?.fiftyTwoWeekHigh?.raw ?? m['52WeekHigh'] ?? yahooChart?.fiftyTwoWeekHigh ?? null;
-  const low52  = sd?.fiftyTwoWeekLow?.raw  ?? m['52WeekLow']  ?? yahooChart?.fiftyTwoWeekLow  ?? null;
+  // 52W — Yahoo, then Finnhub metrics
+  const high52 = yQuote?.fiftyTwoWeekHigh ?? m['52WeekHigh'] ?? null;
+  const low52  = yQuote?.fiftyTwoWeekLow  ?? m['52WeekLow']  ?? null;
 
-  // Name & sector — Finnhub profile is best
-  const name   = profile?.name   || yp?.shortName || yp?.longName || symbol;
-  const sector = profile?.finnhubIndustry || sd?.sector?.raw || null;
+  const name   = fhProfile?.name || yQuote?.shortName || yQuote?.longName || symbol;
+  const sector = fhProfile?.finnhubIndustry || yQuote?.sector || null;
 
-  return {
-    name,
-    sector,
-    marketCap: fmt(mcap),
-    pe,
-    volume:    fmt(vol),
-    high52,
-    low52,
-    isCrypto:  false,
-  };
+  return { name, sector, marketCap: fmt(mcap), pe, volume: fmt(vol), high52, low52, isCrypto: false };
 }
 
 async function getCryptoStats(symbol) {
@@ -121,22 +94,16 @@ async function getCryptoStats(symbol) {
   const mcap = gecko?.market_data?.market_cap?.usd ?? null;
   const vol  = gecko?.market_data?.total_volume?.usd
     ?? (binance?.quoteVolume ? parseFloat(binance.quoteVolume) : null);
-  const high = gecko?.market_data?.ath?.usd
-    ?? gecko?.market_data?.high_24h?.usd
+  // For 52W use all-time-high / all-time-low as best proxy
+  const high52 = gecko?.market_data?.ath?.usd ?? gecko?.market_data?.high_24h?.usd
     ?? (binance?.highPrice ? parseFloat(binance.highPrice) : null);
-  const low  = gecko?.market_data?.atl?.usd
-    ?? gecko?.market_data?.low_24h?.usd
+  const low52  = gecko?.market_data?.atl?.usd ?? gecko?.market_data?.low_24h?.usd
     ?? (binance?.lowPrice ? parseFloat(binance.lowPrice) : null);
 
   return {
-    name:      gecko?.name || symbol,
-    sector:    'Crypto',
-    marketCap: fmt(mcap),
-    pe:        'N/A',
-    volume:    fmt(vol),
-    high52:    high,
-    low52:     low,
-    isCrypto:  true,
+    name: gecko?.name || symbol, sector: 'Crypto',
+    marketCap: fmt(mcap), pe: 'N/A', volume: fmt(vol),
+    high52, low52, isCrypto: true,
   };
 }
 
@@ -158,13 +125,11 @@ Deno.serve(async (req) => {
       return Response.json(JSON.parse(cached.data));
     }
 
-    const stats = isCrypto
-      ? await getCryptoStats(cleanSym)
-      : await getStockStats(cleanSym);
+    const stats = isCrypto ? await getCryptoStats(cleanSym) : await getStockStats(cleanSym);
 
     const payload = { cache_key: cacheKey, data: JSON.stringify(stats), refreshed_at: new Date().toISOString() };
     if (cached) {
-      base44.asServiceRole.entities.CachedData.update(cached.id, payload); // non-blocking bg update
+      base44.asServiceRole.entities.CachedData.update(cached.id, payload); // bg, non-blocking
     } else {
       await base44.asServiceRole.entities.CachedData.create(payload);
     }
