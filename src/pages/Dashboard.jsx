@@ -6,6 +6,7 @@ import MarketSentiment from '../components/dashboard/MarketSentiment';
 import TrendingTickers from '../components/dashboard/TrendingTickers';
 import LatestNews from '../components/dashboard/LatestNews';
 import AppPromo from '../components/dashboard/AppPromo';
+import Plus500Banner from '../components/dashboard/Plus500Banner';
 
 export default function Dashboard() {
   return (
