@@ -47,12 +47,14 @@ async function yahooStats(symbol) {
   return meta;
 }
 
-// Yahoo Finance v10 quoteSummary — module=summaryDetail,defaultKeyStatistics
+// Yahoo Finance v10 quoteSummary
 async function yahooSummary(symbol) {
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,price`;
+  const modules = 'summaryDetail,defaultKeyStatistics,price';
+  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${encodeURIComponent(modules)}&corsDomain=finance.yahoo.com`;
   const data = await safeJson(url, {
-    'User-Agent': 'Mozilla/5.0 (compatible; AIVestor/1.0)',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json',
+    'Referer': 'https://finance.yahoo.com/',
   });
   const result = data?.quoteSummary?.result?.[0];
   if (!result) return null;
