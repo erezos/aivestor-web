@@ -49,15 +49,17 @@ export default function Dashboard() {
           <MarketSentiment />
           <div className="glass rounded-2xl p-4 flex flex-col items-center gap-2">
             <p className="text-[10px] text-white/20 uppercase tracking-widest font-semibold">Sponsored</p>
-            <iframe
-              src="https://cdn.plus500.com/Media/Banners/336x280/98235/index.html?set=affiliates3 - Indonesia Local Banners - April 2025&language=EN&country=ID&crId=98235&url=https%3A%2F%2Fwww.plus500.com%2Fen--1%2Fmultiplatformdownload%3Fclt%3DWeb%26id%3D138803%26pl%3D2%26crId%3D98235"
-              width="336"
-              height="280"
-              scrolling="no"
-              frameBorder="0"
-              style={{ border: 'none', maxWidth: '100%' }}
-              title="Plus500 Promotion"
-            />
+            <div style={{ width: '100%', maxWidth: 336, aspectRatio: '336/280', overflow: 'hidden' }}>
+              <iframe
+                src="https://cdn.plus500.com/Media/Banners/336x280/98235/index.html?set=affiliates3 - Indonesia Local Banners - April 2025&language=EN&country=ID&crId=98235&url=https%3A%2F%2Fwww.plus500.com%2Fen--1%2Fmultiplatformdownload%3Fclt%3DWeb%26id%3D138803%26pl%3D2%26crId%3D98235"
+                width="336"
+                height="280"
+                scrolling="no"
+                frameBorder="0"
+                style={{ border: 'none', width: '100%', height: '100%' }}
+                title="Plus500 Promotion"
+              />
+            </div>
           </div>
           <AppPromo />
         </div>
