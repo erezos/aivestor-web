@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       return Response.json({ narrative: null, articles: [] });
     }
 
-    const top = articles.slice(0, 8);
+    const top = articles.slice(0, 5);
     const headlines = top.map((a, i) => `${i}: ${a.headline?.slice(0, 100)}`).join('\n');
 
     // ── Run redirect resolution + AI call IN PARALLEL ──────────────────────
