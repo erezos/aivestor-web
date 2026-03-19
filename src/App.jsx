@@ -13,7 +13,6 @@ import Watchlist from './pages/Watchlist';
 import Asset from './pages/Asset';
 import News from './pages/News';
 import Education from './pages/Education';
-import Portfolio from './pages/Portfolio';
 import Earnings from './pages/Earnings';
 import TestSuite from './pages/TestSuite';
 
