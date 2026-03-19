@@ -181,31 +181,7 @@ export default function Asset() {
 
         {/* Key Stats + Analyst Ratings */}
         <div className="space-y-4">
-          <div className="glass rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 className="w-4 h-4 text-violet-400" />
-              <h3 className="text-sm font-semibold text-white/80">Key Statistics</h3>
-            </div>
-            {isLoading ? (
-              <div className="grid grid-cols-2 gap-3">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Market Cap', value: asset?.marketCap },
-                  { label: 'P/E Ratio', value: asset?.pe },
-                  { label: 'Volume', value: asset?.volume },
-                  { label: '52W High', value: asset?.high52 ? `$${Number(asset.high52).toLocaleString()}` : '—' },
-                  { label: '52W Low', value: asset?.low52 ? `$${Number(asset.low52).toLocaleString()}` : '—' },
-                  { label: 'Sector', value: asset?.sector },
-                ].map(stat => (
-                  <div key={stat.label} className="glass rounded-xl p-3">
-                    <div className="text-[10px] text-white/30 mb-1">{stat.label}</div>
-                    <div className="text-sm font-semibold text-white">{stat.value || '—'}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        <KeyStats symbol={symbol} />
 
           {/* Analyst Consensus */}
           {!isLoading && asset?.analystRec && (
