@@ -1,13 +1,24 @@
 /**
- * getAssetNews — Alpaca news API + AI narrative + per-article sentiment
- * Alpaca provides direct article URLs and real publisher source names.
+ * getAssetNews — Alpaca news API with keyword-based sentiment (no AI timeout risk).
+ * Alpaca provides direct publisher URLs and real source names.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
-const ALPACA_KEY  = Deno.env.get('ALPACA_API_KEY');
-const ALPACA_SEC  = Deno.env.get('ALPACA_API_SECRET');
-const ALPACA_HDR  = { 'APCA-API-KEY-ID': ALPACA_KEY, 'APCA-API-SECRET-KEY': ALPACA_SEC };
-const CACHE_TTL   = 60 * 60000; // 1 hour
+const ALPACA_KEY = Deno.env.get('ALPACA_API_KEY');
+const ALPACA_SEC = Deno.env.get('ALPACA_API_SECRET');
+const ALPACA_HDR = { 'APCA-API-KEY-ID': ALPACA_KEY, 'APCA-API-SECRET-KEY': ALPACA_SEC };
+const CACHE_TTL  = 60 * 60000; // 1 hour
+
+const BULLISH_WORDS = /surge|jump|soar|rally|gain|beat|record|growth|rise|profit|boost|strong|upgrade|buy|bullish|positive|upbeat/i;
+const BEARISH_WORDS = /fall|drop|plunge|decline|miss|loss|risk|warn|downgrade|sell|bearish|concern|weak|tumble|cut|lawsuit|probe/i;
+
+function sentiment(text) {
+  const bull = (text.match(BULLISH_WORDS) || []).length;
+  const bear = (text.match(BEARISH_WORDS) || []).length;
+  if (bull > bear) return { sentiment: 'Bullish', impact: bull >= 2 ? 3 : 2 };
+  if (bear > bull) return { sentiment: 'Bearish', impact: bear >= 2 ? 3 : 2 };
+  return { sentiment: 'Neutral', impact: 1 };
+}
 
 function domainFromUrl(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
@@ -29,68 +40,55 @@ Deno.serve(async (req) => {
       return Response.json(JSON.parse(cached.data));
     }
 
-    // Fetch news from Alpaca
-    const newsUrl = `https://data.alpaca.markets/v1beta1/news?symbols=${cleanSym}&limit=8&sort=desc`;
-    const newsRes = await fetch(newsUrl, { headers: ALPACA_HDR });
-    const newsJson = newsRes.ok ? await newsRes.json() : null;
-    const articles = newsJson?.news || [];
+    // Fetch news from Alpaca with timeout
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    let articles = [];
+    try {
+      const newsUrl = `https://data.alpaca.markets/v1beta1/news?symbols=${cleanSym}&limit=8&sort=desc`;
+      const newsRes = await fetch(newsUrl, { headers: ALPACA_HDR, signal: controller.signal });
+      const newsJson = newsRes.ok ? await newsRes.json() : null;
+      articles = newsJson?.news || [];
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (articles.length === 0) {
       return Response.json({ narrative: null, articles: [] });
     }
 
     const top = articles.slice(0, 6);
-    const headlines = top.map((a, i) => `${i}: ${a.headline?.slice(0, 100)}`).join('\n');
 
-    // AI narrative + sentiment in parallel with nothing else (Alpaca gives direct URLs)
-    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Analyze these recent ${cleanSym} news headlines.
-${headlines}
-
-Return:
-1. narrative: 2-sentence "What's driving ${cleanSym} right now" summary for investors.
-2. articles: [{idx, sentiment ("Bullish"/"Bearish"/"Neutral"), impact (1-3)}] for each headline.`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          narrative: { type: 'string' },
-          articles: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                idx:       { type: 'number' },
-                sentiment: { type: 'string' },
-                impact:    { type: 'number' },
-              }
-            }
-          }
-        }
-      }
+    // Build narrative from sentiment counts (no AI needed)
+    const counts = { Bullish: 0, Bearish: 0, Neutral: 0 };
+    const mapped = top.map(a => {
+      const text = `${a.headline} ${a.summary || ''}`;
+      const s = sentiment(text);
+      counts[s.sentiment]++;
+      return {
+        id:        a.id,
+        headline:  a.headline?.slice(0, 120),
+        source:    a.source || domainFromUrl(a.url) || 'Unknown',
+        url:       a.url || '',
+        image:     a.images?.[0]?.url || null,
+        datetime:  Math.floor(new Date(a.created_at).getTime() / 1000),
+        sentiment: s.sentiment,
+        impact:    s.impact,
+      };
     });
 
-    const sentimentMap = {};
-    (aiResult.articles || []).forEach(a => { sentimentMap[a.idx] = a; });
-
-    const result = {
-      narrative: aiResult.narrative || null,
-      articles: top.map((a, i) => {
-        const url    = a.url || '';
-        const source = a.source || domainFromUrl(url) || 'Unknown';
-        return {
-          id:        a.id,
-          headline:  a.headline?.slice(0, 120),
-          source,
-          url,
-          image:     a.images?.[0]?.url || null,
-          datetime:  Math.floor(new Date(a.created_at).getTime() / 1000),
-          sentiment: sentimentMap[i]?.sentiment || 'Neutral',
-          impact:    sentimentMap[i]?.impact    || 1,
-        };
-      }),
+    // Simple rule-based narrative
+    const dominant = counts.Bullish > counts.Bearish ? 'Bullish' :
+                     counts.Bearish > counts.Bullish ? 'Bearish' : 'Mixed';
+    const narrativeMap = {
+      Bullish: `Recent news around ${cleanSym} is predominantly positive, with headlines pointing to strength and momentum. Investor sentiment appears optimistic based on the latest coverage.`,
+      Bearish: `Recent headlines around ${cleanSym} skew cautious, with several stories flagging risks or weakness. Investors may want to monitor developments closely.`,
+      Mixed:   `News flow around ${cleanSym} is mixed, with both positive and negative headlines in circulation. The market appears to be weighing competing narratives.`,
     };
 
-    // Persist cache
+    const result = { narrative: narrativeMap[dominant], articles: mapped };
+
+    // Persist cache (fire-and-forget)
     const payload = { cache_key: cacheKey, data: JSON.stringify(result), refreshed_at: new Date().toISOString() };
     if (cached) base44.asServiceRole.entities.CachedData.update(cached.id, payload).catch(() => {});
     else        base44.asServiceRole.entities.CachedData.create(payload).catch(() => {});
