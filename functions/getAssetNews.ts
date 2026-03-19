@@ -1,18 +1,37 @@
 /**
- * getAssetNews — Alpaca news API with keyword-based sentiment (no AI timeout risk).
- * Alpaca provides direct publisher URLs and real source names.
+ * getAssetNews — Finnhub company news + keyword sentiment (no AI, no redirect chase).
+ * Source fix: map known syndication names to proper publisher labels.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
-const ALPACA_KEY = Deno.env.get('ALPACA_API_KEY');
-const ALPACA_SEC = Deno.env.get('ALPACA_API_SECRET');
-const ALPACA_HDR = { 'APCA-API-KEY-ID': ALPACA_KEY, 'APCA-API-SECRET-KEY': ALPACA_SEC };
-const CACHE_TTL  = 60 * 60000; // 1 hour
+const FINNHUB_KEY = Deno.env.get('FINNHUB_API_KEY');
+const CACHE_TTL   = 60 * 60000; // 1 hour
+
+const SOURCE_MAP = {
+  yahoo:          'Yahoo Finance',
+  'yahoo finance':'Yahoo Finance',
+  marketwatch:    'MarketWatch',
+  reuters:        'Reuters',
+  bloomberg:      'Bloomberg',
+  cnbc:           'CNBC',
+  benzinga:       'Benzinga',
+  seekingalpha:   'Seeking Alpha',
+  thestreet:      'TheStreet',
+  barrons:        "Barron's",
+  wsj:            'WSJ',
+  ft:             'Financial Times',
+};
+
+function cleanSource(raw) {
+  if (!raw) return 'Financial News';
+  const key = raw.toLowerCase().trim();
+  return SOURCE_MAP[key] || raw;
+}
 
 const BULLISH_WORDS = /surge|jump|soar|rally|gain|beat|record|growth|rise|profit|boost|strong|upgrade|buy|bullish|positive|upbeat/i;
 const BEARISH_WORDS = /fall|drop|plunge|decline|miss|loss|risk|warn|downgrade|sell|bearish|concern|weak|tumble|cut|lawsuit|probe/i;
 
-function sentiment(text) {
+function getSentiment(text) {
   const bull = (text.match(BULLISH_WORDS) || []).length;
   const bear = (text.match(BEARISH_WORDS) || []).length;
   if (bull > bear) return { sentiment: 'Bullish', impact: bull >= 2 ? 3 : 2 };
@@ -20,8 +39,10 @@ function sentiment(text) {
   return { sentiment: 'Neutral', impact: 1 };
 }
 
-function domainFromUrl(url) {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
+async function fhGet(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch(`https://finnhub.io/api/v1${path}${sep}token=${FINNHUB_KEY}`);
+  return res.ok ? res.json() : null;
 }
 
 Deno.serve(async (req) => {
@@ -40,46 +61,36 @@ Deno.serve(async (req) => {
       return Response.json(JSON.parse(cached.data));
     }
 
-    // Fetch news from Alpaca with timeout
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    let articles = [];
-    try {
-      const newsUrl = `https://data.alpaca.markets/v1beta1/news?symbols=${cleanSym}&limit=8&sort=desc`;
-      const newsRes = await fetch(newsUrl, { headers: ALPACA_HDR, signal: controller.signal });
-      const newsJson = newsRes.ok ? await newsRes.json() : null;
-      articles = newsJson?.news || [];
-    } finally {
-      clearTimeout(timer);
-    }
+    // Fetch last 7 days of news from Finnhub
+    const to   = new Date().toISOString().slice(0, 10);
+    const from = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const articles = await fhGet(`/company-news?symbol=${cleanSym}&from=${from}&to=${to}`);
 
-    if (articles.length === 0) {
+    if (!articles || articles.length === 0) {
       return Response.json({ narrative: null, articles: [] });
     }
 
     const top = articles.slice(0, 6);
 
-    // Build narrative from sentiment counts (no AI needed)
+    // Keyword sentiment + source mapping — no AI needed
     const counts = { Bullish: 0, Bearish: 0, Neutral: 0 };
     const mapped = top.map(a => {
-      const text = `${a.headline} ${a.summary || ''}`;
-      const s = sentiment(text);
+      const s = getSentiment(`${a.headline} ${a.summary || ''}`);
       counts[s.sentiment]++;
       return {
         id:        a.id,
         headline:  a.headline?.slice(0, 120),
-        source:    a.source || domainFromUrl(a.url) || 'Unknown',
+        source:    cleanSource(a.source),
         url:       a.url || '',
-        image:     a.images?.[0]?.url || null,
-        datetime:  Math.floor(new Date(a.created_at).getTime() / 1000),
+        image:     a.image || null,
+        datetime:  a.datetime,
         sentiment: s.sentiment,
         impact:    s.impact,
       };
     });
 
-    // Simple rule-based narrative
-    const dominant = counts.Bullish > counts.Bearish ? 'Bullish' :
-                     counts.Bearish > counts.Bullish ? 'Bearish' : 'Mixed';
+    const dominant = counts.Bullish > counts.Bearish ? 'Bullish'
+                   : counts.Bearish > counts.Bullish ? 'Bearish' : 'Mixed';
     const narrativeMap = {
       Bullish: `Recent news around ${cleanSym} is predominantly positive, with headlines pointing to strength and momentum. Investor sentiment appears optimistic based on the latest coverage.`,
       Bearish: `Recent headlines around ${cleanSym} skew cautious, with several stories flagging risks or weakness. Investors may want to monitor developments closely.`,
