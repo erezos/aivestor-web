@@ -1,7 +1,7 @@
 /**
  * getAssetNews — Finnhub company news + AI narrative + per-article sentiment
- * Source fix: Finnhub wraps all URLs through finnhub.io/api/news redirect and labels
- * everything as "Yahoo". We resolve each redirect (HEAD, parallel) to get the real URL + domain.
+ * Source fix: resolve Finnhub redirect URLs to get real publisher domain.
+ * Perf: redirect resolution runs IN PARALLEL with the AI call to stay within time limits.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
@@ -14,10 +14,13 @@ async function fhGet(path) {
   return res.ok ? res.json() : null;
 }
 
-/** Follow redirect and return the final URL (without downloading body) */
+/** Follow one redirect with a tight timeout — returns final URL or original on failure */
 async function resolveRedirect(url) {
   try {
-    const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
+    clearTimeout(timer);
     return res.url || url;
   } catch {
     return url;
@@ -59,68 +62,60 @@ Deno.serve(async (req) => {
       return Response.json({ narrative: null, articles: [] });
     }
 
-    // Take top 8 most recent articles
     const top = articles.slice(0, 8);
+    const headlines = top.map((a, i) => `${i}: ${a.headline?.slice(0, 100)}`).join('\n');
 
-    // Resolve all redirect URLs in parallel — this is the source fix
-    const resolvedUrls = await Promise.all(top.map(a => resolveRedirect(a.url)));
-
-    const enrichedTop = top.map((a, i) => {
-      const realUrl = resolvedUrls[i] || a.url;
-      const domain  = domainFromUrl(realUrl);
-      return {
-        id:       a.id,
-        headline: a.headline?.slice(0, 120),
-        source:   domain || a.source, // real domain, e.g. "fool.com", "reuters.com"
-        url:      realUrl,
-        image:    a.image || null,
-        datetime: a.datetime,
-      };
-    });
-
-    // ONE batched AI call — send only headlines, get back narrative + sentiments
-    const headlines = enrichedTop.map((a, i) => `${i}: ${a.headline}`).join('\n');
-
-    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Analyze these recent ${cleanSym} news headlines and return insights.
-Headlines:
+    // ── Run redirect resolution + AI call IN PARALLEL ──────────────────────
+    const [resolvedUrls, aiResult] = await Promise.all([
+      Promise.all(top.map(a => resolveRedirect(a.url))),
+      base44.asServiceRole.integrations.Core.InvokeLLM({
+        prompt: `Analyze these recent ${cleanSym} news headlines.
 ${headlines}
 
 Return:
-1. narrative: A 2-sentence "What's driving ${cleanSym} right now" market intelligence summary for investors.
-2. articles: Array of {idx, sentiment ("Bullish"/"Bearish"/"Neutral"), impact (1-3, how likely to move price)} for each headline index.
-
-Be precise and grounded. No fluff.`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          narrative: { type: 'string' },
-          articles:  {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                idx:       { type: 'number' },
-                sentiment: { type: 'string' },
-                impact:    { type: 'number' },
+1. narrative: 2-sentence "What's driving ${cleanSym} right now" summary for investors.
+2. articles: [{idx, sentiment ("Bullish"/"Bearish"/"Neutral"), impact (1-3)}] for each headline.`,
+        response_json_schema: {
+          type: 'object',
+          properties: {
+            narrative: { type: 'string' },
+            articles: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  idx:       { type: 'number' },
+                  sentiment: { type: 'string' },
+                  impact:    { type: 'number' },
+                }
               }
             }
           }
         }
-      }
-    });
+      }),
+    ]);
 
-    // Merge AI results back into articles
     const sentimentMap = {};
     (aiResult.articles || []).forEach(a => { sentimentMap[a.idx] = a; });
 
     const result = {
       narrative: aiResult.narrative || null,
-      articles: enrichedTop.map((a, i) => ({
-        ...a,
-        sentiment: sentimentMap[i]?.sentiment || 'Neutral',
-        impact:    sentimentMap[i]?.impact    || 1,
-      })),
+      articles: top.map((a, i) => {
+        const realUrl = resolvedUrls[i] || a.url;
+        const domain  = domainFromUrl(realUrl);
+        // Only use domain if it's not finnhub itself (redirect failed or unresolved)
+        const source  = (domain && !domain.includes('finnhub')) ? domain : a.source;
+        return {
+          id:        a.id,
+          headline:  a.headline?.slice(0, 120),
+          source,
+          url:       realUrl,
+          image:     a.image || null,
+          datetime:  a.datetime,
+          sentiment: sentimentMap[i]?.sentiment || 'Neutral',
+          impact:    sentimentMap[i]?.impact    || 1,
+        };
+      }),
     };
 
     // Persist to cache
