@@ -79,26 +79,34 @@ Deno.serve(async (req) => {
     // Check cache first
     const rows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey });
     const entry = rows[0];
-    if (entry && Date.now() - new Date(entry.refreshed_at).getTime() < ttlMs) {
+    const cacheAge = entry ? Date.now() - new Date(entry.refreshed_at).getTime() : Infinity;
+
+    // Fresh cache → return immediately
+    if (entry && cacheAge < ttlMs) {
       return Response.json(JSON.parse(entry.data));
     }
 
-    // Fetch from provider
+    // STALE cache → return immediately, refresh in background
+    if (entry && cacheAge >= ttlMs) {
+      const refresh = async () => {
+        const candles = isCrypto ? await getCryptoBars(cleanSym, range) : await getAlpacaBars(cleanSym, range);
+        if (!candles.length) return;
+        const payload = { cache_key: cacheKey, data: JSON.stringify(candles), refreshed_at: new Date().toISOString() };
+        await base44.asServiceRole.entities.CachedData.update(entry.id, payload);
+      };
+      refresh(); // fire and forget
+      return Response.json(JSON.parse(entry.data));
+    }
+
+    // COLD cache (first ever request) → fetch synchronously
     const candles = isCrypto
       ? await getCryptoBars(cleanSym, range)
       : await getAlpacaBars(cleanSym, range);
 
-    // Prefer stale cache over empty response (e.g. weekend / market closed)
-    if (!candles.length && entry) return Response.json(JSON.parse(entry.data));
     if (!candles.length) return Response.json([]);
 
-    // Persist cache (fire and forget)
     const payload = { cache_key: cacheKey, data: JSON.stringify(candles), refreshed_at: new Date().toISOString() };
-    if (entry) {
-      base44.asServiceRole.entities.CachedData.update(entry.id, payload);
-    } else {
-      base44.asServiceRole.entities.CachedData.create(payload);
-    }
+    base44.asServiceRole.entities.CachedData.create(payload);
 
     return Response.json(candles);
   } catch (err) {
