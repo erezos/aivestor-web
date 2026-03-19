@@ -123,13 +123,6 @@ export default function Layout() {
               <Smartphone className="w-3 h-3" />
               TA.AI App
             </a>
-            
-            <button 
-              className="md:hidden p-2 rounded-lg hover:bg-white/5"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
           </div>
         </div>
       </header>
