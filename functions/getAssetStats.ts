@@ -32,27 +32,36 @@ async function fhGet(path) {
 }
 
 async function getStockStats(symbol) {
-  const [profile, metrics] = await Promise.all([
+  const [profile, metrics, quote] = await Promise.all([
     fhGet(`/stock/profile2?symbol=${symbol}`),
     fhGet(`/stock/basic-financials?symbol=${symbol}&metric=all`),
+    fhGet(`/quote?symbol=${symbol}`),
   ]);
 
   const m = metrics?.metric || {};
 
-  const mcap = profile?.marketCapitalization
-    ? profile.marketCapitalization * 1e6
-    : null;
+  // Market cap: profile field (in millions) OR live price × shares outstanding
+  let mcap = null;
+  if (profile?.marketCapitalization) {
+    mcap = profile.marketCapitalization * 1e6;
+  } else if (profile?.shareOutstanding && quote?.c) {
+    mcap = profile.shareOutstanding * 1e6 * quote.c;
+  }
 
   // Try multiple PE fields in order of reliability
-  const peRaw = m.peBasicExclExtraTTM ?? m.peTTM ?? m.pe ?? null;
+  const peRaw = m.peBasicExclExtraTTM ?? m.peTTM ?? m.pe ?? m.peExclExtraTTM ?? null;
   const pe = peRaw != null
     ? (peRaw <= 0 ? 'N/A' : peRaw.toFixed(1))
     : null;
 
-  // 10-day average volume in millions of shares
+  // Volume: 10-day avg (in millions of shares) → absolute shares
   const vol = m['10DayAverageTradingVolume']
     ? m['10DayAverageTradingVolume'] * 1e6
     : null;
+
+  // 52W: from metrics or fall back to quote's high/low
+  const high52 = m['52WeekHigh'] ?? quote?.h ?? null;
+  const low52  = m['52WeekLow']  ?? quote?.l  ?? null;
 
   return {
     name:      profile?.name || symbol,
@@ -60,8 +69,8 @@ async function getStockStats(symbol) {
     marketCap: fmt(mcap),
     pe,
     volume:    fmt(vol),
-    high52:    m['52WeekHigh'] ?? null,
-    low52:     m['52WeekLow']  ?? null,
+    high52,
+    low52,
     isCrypto:  false,
   };
 }
