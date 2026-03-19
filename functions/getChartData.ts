@@ -71,14 +71,18 @@ Deno.serve(async (req) => {
     const { symbol, range = '3mo' } = await req.json();
     if (!symbol) return Response.json({ error: 'symbol required' }, { status: 400 });
 
-    const cleanSym  = symbol.replace(/-USD$/i, '').toUpperCase();
-    const cacheKey  = `chart_${cleanSym}_${range}`;
-    const ttlMs     = (TTL_MIN[range] || 60) * 60000;
-    const isCrypto  = CRYPTO_SET.has(cleanSym);
+    const cleanSym = symbol.replace(/-USD$/i, '').toUpperCase();
+    const cacheKey = `chart_${cleanSym}_${range}`;
+    const ttlMs    = (TTL_MIN[range] || 60) * 60000;
+    const isCrypto = CRYPTO_SET.has(cleanSym);
 
-    // Check cache first
-    const rows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey });
-    const entry = rows[0];
+    // Try cache lookup — non-fatal if it fails
+    let entry = null;
+    try {
+      const rows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey });
+      entry = rows[0] || null;
+    } catch (_) { /* cache unavailable, fetch fresh */ }
+
     const cacheAge = entry ? Date.now() - new Date(entry.refreshed_at).getTime() : Infinity;
 
     // Fresh cache → return immediately
@@ -86,27 +90,21 @@ Deno.serve(async (req) => {
       return Response.json(JSON.parse(entry.data));
     }
 
-    // STALE cache → return immediately, refresh in background
-    if (entry && cacheAge >= ttlMs) {
-      const refresh = async () => {
-        const candles = isCrypto ? await getCryptoBars(cleanSym, range) : await getAlpacaBars(cleanSym, range);
-        if (!candles.length) return;
-        const payload = { cache_key: cacheKey, data: JSON.stringify(candles), refreshed_at: new Date().toISOString() };
-        await base44.asServiceRole.entities.CachedData.update(entry.id, payload);
-      };
-      refresh(); // fire and forget
-      return Response.json(JSON.parse(entry.data));
-    }
-
-    // COLD cache (first ever request) → fetch synchronously
+    // Fetch new candles
     const candles = isCrypto
       ? await getCryptoBars(cleanSym, range)
       : await getAlpacaBars(cleanSym, range);
 
+    // Return stale data if fetch failed
+    if (!candles.length && entry) return Response.json(JSON.parse(entry.data));
     if (!candles.length) return Response.json([]);
 
+    // Persist to cache (non-blocking, non-fatal)
     const payload = { cache_key: cacheKey, data: JSON.stringify(candles), refreshed_at: new Date().toISOString() };
-    base44.asServiceRole.entities.CachedData.create(payload);
+    try {
+      if (entry) base44.asServiceRole.entities.CachedData.update(entry.id, payload);
+      else       base44.asServiceRole.entities.CachedData.create(payload);
+    } catch (_) { /* cache write failed, ignore */ }
 
     return Response.json(candles);
   } catch (err) {
