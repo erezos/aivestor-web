@@ -162,7 +162,8 @@ Deno.serve(async (req) => {
       if (assetCache) {
         const d = JSON.parse(assetCache.data);
         // Only use if it has the fields we need
-        if (d.sector || d.marketCap || d.pe) {
+        const hasRealData = (v) => v && v !== '—' && v !== 'N/A' && v !== null;
+        if (hasRealData(d.sector) || hasRealData(d.marketCap)) {
           const result = {
             name: d.name, sector: d.sector,
             marketCap: d.marketCap, volume: d.volume,
