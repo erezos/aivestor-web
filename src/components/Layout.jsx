@@ -15,9 +15,8 @@ const navItems = [
   { path: '/Dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/HotBoard', label: 'Hot Board', icon: TrendingUp },
   { path: '/Watchlist', label: 'Watchlist', icon: Star },
-  { path: '/Portfolio', label: 'Portfolio', icon: PieChart },
   { path: '/Earnings', label: 'Earnings', icon: CalendarDays },
-  { path: '/News', label: 'Market News', icon: Newspaper },
+  { path: '/News', label: 'News', icon: Newspaper },
   { path: '/Education', label: 'Learn', icon: BookOpen },
 ];
 
