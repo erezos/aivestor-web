@@ -37,6 +37,8 @@ async function getStockStats(symbol) {
     fhGet(`/stock/basic-financials?symbol=${symbol}&metric=all`),
     fhGet(`/quote?symbol=${symbol}`),
   ]);
+  console.log('metrics raw:', JSON.stringify(metrics)?.slice(0, 500));
+  console.log('profile raw:', JSON.stringify(profile)?.slice(0, 200));
 
   const m = metrics?.metric || {};
 
