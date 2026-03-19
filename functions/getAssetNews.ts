@@ -1,7 +1,7 @@
 /**
  * getAssetNews — Finnhub company news + AI narrative + per-article sentiment
- * Token strategy: ONE AI call per symbol, only headlines sent (no article bodies)
- * Cache: 1 hour per symbol — AI cost is ~100 tokens per call, very cheap
+ * Source fix: Finnhub wraps all URLs through finnhub.io/api/news redirect and labels
+ * everything as "Yahoo". We resolve each redirect (HEAD, parallel) to get the real URL + domain.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
@@ -12,6 +12,24 @@ async function fhGet(path) {
   const sep = path.includes('?') ? '&' : '?';
   const res = await fetch(`https://finnhub.io/api/v1${path}${sep}token=${FINNHUB_KEY}`);
   return res.ok ? res.json() : null;
+}
+
+/** Follow redirect and return the final URL (without downloading body) */
+async function resolveRedirect(url) {
+  try {
+    const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    return res.url || url;
+  } catch {
+    return url;
+  }
+}
+
+function domainFromUrl(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
 }
 
 Deno.serve(async (req) => {
@@ -42,18 +60,26 @@ Deno.serve(async (req) => {
     }
 
     // Take top 8 most recent articles
-    const top = articles.slice(0, 8).map(a => ({
-      id:       a.id,
-      headline: a.headline?.slice(0, 120),
-      source:   a.source,
-      url:      a.url,
-      image:    a.image || null,
-      datetime: a.datetime,
-    }));
+    const top = articles.slice(0, 8);
+
+    // Resolve all redirect URLs in parallel — this is the source fix
+    const resolvedUrls = await Promise.all(top.map(a => resolveRedirect(a.url)));
+
+    const enrichedTop = top.map((a, i) => {
+      const realUrl = resolvedUrls[i] || a.url;
+      const domain  = domainFromUrl(realUrl);
+      return {
+        id:       a.id,
+        headline: a.headline?.slice(0, 120),
+        source:   domain || a.source, // real domain, e.g. "fool.com", "reuters.com"
+        url:      realUrl,
+        image:    a.image || null,
+        datetime: a.datetime,
+      };
+    });
 
     // ONE batched AI call — send only headlines, get back narrative + sentiments
-    // Very token-efficient: ~150 tokens input, ~200 tokens output
-    const headlines = top.map((a, i) => `${i}: ${a.headline}`).join('\n');
+    const headlines = enrichedTop.map((a, i) => `${i}: ${a.headline}`).join('\n');
 
     const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt: `Analyze these recent ${cleanSym} news headlines and return insights.
@@ -88,15 +114,13 @@ Be precise and grounded. No fluff.`,
     const sentimentMap = {};
     (aiResult.articles || []).forEach(a => { sentimentMap[a.idx] = a; });
 
-    const enriched = top.map((a, i) => ({
-      ...a,
-      sentiment: sentimentMap[i]?.sentiment || 'Neutral',
-      impact:    sentimentMap[i]?.impact    || 1,
-    }));
-
     const result = {
       narrative: aiResult.narrative || null,
-      articles:  enriched,
+      articles: enrichedTop.map((a, i) => ({
+        ...a,
+        sentiment: sentimentMap[i]?.sentiment || 'Neutral',
+        impact:    sentimentMap[i]?.impact    || 1,
+      })),
     };
 
     // Persist to cache
