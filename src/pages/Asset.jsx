@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, BarChart3, Users } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, Users } from 'lucide-react';
+import KeyStats from '../components/asset/KeyStats';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
