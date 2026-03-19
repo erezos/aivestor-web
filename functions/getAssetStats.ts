@@ -70,16 +70,15 @@ async function finnhubProfile(symbol) {
   };
 }
 
-async function finnhubMetrics(symbol) {
+// Finnhub earnings/PE from the EPS + price approach using quote
+async function finnhubPE(symbol) {
+  // Use Finnhub company financials endpoint — lighter than basic-financials
   const data = await safeJson(
-    `https://finnhub.io/api/v1/stock/basic-financials?symbol=${symbol}&metric=all&token=${FINNHUB_KEY}`
+    `https://finnhub.io/api/v1/stock/metric?symbol=${symbol}&metric=all&token=${FINNHUB_KEY}`
   );
   const m = data?.metric || {};
-  return {
-    pe:     m.peBasicExclExtraTTM ?? m.peTTM ?? null,
-    high52: m['52WeekHigh'] ?? null,
-    low52:  m['52WeekLow']  ?? null,
-  };
+  const pe = m.peBasicExclExtraTTM ?? m.peTTM ?? m.peNormalizedAnnual ?? null;
+  return pe != null && pe > 0 ? pe.toFixed(1) : null;
 }
 
 // ─── CoinGecko: crypto fundamentals, no auth ─────────────────────────────────
