@@ -42,7 +42,6 @@ function ArticleCard({ article, index }) {
             {article.headline}
           </p>
           <div className="flex items-center gap-3 mt-2">
-            <span className="text-[10px] text-white/25">{article.source}</span>
             <span className="text-[10px] text-white/20">{timeAgo}</span>
             {/* Impact dots */}
             <div className="flex items-center gap-0.5 ml-auto">
