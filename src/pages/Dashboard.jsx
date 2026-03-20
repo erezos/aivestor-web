@@ -48,7 +48,6 @@ export default function Dashboard() {
         {/* Right Column */}
         <div className="lg:col-span-4 space-y-5">
           <MarketSentiment />
-          <AffiliateBanner />
           <Plus500Banner />
           <AppPromo />
         </div>

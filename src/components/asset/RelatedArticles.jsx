@@ -13,6 +13,32 @@ const SENTIMENT_CFG = {
 
 const IMPACT_DOT = { 1: 'bg-white/20', 2: 'bg-amber-400', 3: 'bg-rose-400' };
 
+function SponsoredCard() {
+  return (
+    <a
+      href="https://www.vantagemarkets.com/open-live-account/?affid=MjQwMDAzOTk=&invitecode=tQciI764"
+      target="_blank"
+      rel="noopener noreferrer sponsored"
+      className="group block glass rounded-xl p-4 border border-amber-500/10 glass-hover transition-all"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0 mt-0.5 flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-semibold bg-amber-500/10 border-amber-500/20 text-amber-400">
+          Sponsored
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-white/80 group-hover:text-white leading-snug transition-colors">
+            Trade Stocks & Crypto with Ultra-Low Spreads — Open a Free Account on Vantage Markets
+          </p>
+          <div className="flex items-center gap-3 mt-2">
+            <span className="text-[10px] text-white/20">vantagemarkets.com</span>
+          </div>
+        </div>
+        <ExternalLink className="w-3.5 h-3.5 text-white/15 group-hover:text-white/40 flex-shrink-0 mt-1 transition-colors" />
+      </div>
+    </a>
+  );
+}
+
 function ArticleCard({ article, index }) {
   const cfg = SENTIMENT_CFG[article.sentiment] || SENTIMENT_CFG.Neutral;
   const Icon = cfg.icon;
