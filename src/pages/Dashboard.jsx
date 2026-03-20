@@ -7,7 +7,6 @@ import TrendingTickers from '../components/dashboard/TrendingTickers';
 import LatestNews from '../components/dashboard/LatestNews';
 import AppPromo from '../components/dashboard/AppPromo';
 import Plus500Banner from '../components/dashboard/Plus500Banner';
-import AffiliateBanner from '../components/dashboard/AffiliateBanner';
 
 export default function Dashboard() {
   return (

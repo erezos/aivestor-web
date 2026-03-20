@@ -110,7 +110,10 @@ export default function RelatedArticles({ symbol }) {
       {!isLoading && data?.articles?.length > 0 && (
         <div className="space-y-2">
           {data.articles.map((article, i) => (
-            <ArticleCard key={article.id || i} article={article} index={i} />
+            <React.Fragment key={article.id || i}>
+              <ArticleCard article={article} index={i} />
+              {i === 1 && <SponsoredCard />}
+            </React.Fragment>
           ))}
         </div>
       )}
