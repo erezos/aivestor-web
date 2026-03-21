@@ -6,6 +6,7 @@ import { fetchMultiQuote } from '../components/marketData';
 import { Link } from 'react-router-dom';
 import AddAssetDialog from '../components/portfolio/AddAssetDialog';
 import PortfolioSummary from '../components/portfolio/PortfolioSummary';
+import AssetSearchDialog from '../components/shared/AssetSearchDialog';
 import { useUserPrefs } from '@/lib/useUserPrefs';
 
 export default function Portfolio() {
