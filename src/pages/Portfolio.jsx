@@ -10,7 +10,8 @@ import AssetSearchDialog from '../components/shared/AssetSearchDialog';
 import { useUserPrefs } from '@/lib/useUserPrefs';
 
 export default function Portfolio() {
-  const [addOpen, setAddOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
