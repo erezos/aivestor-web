@@ -1,25 +1,21 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PieChart, Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Edit3, Check, X } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { PieChart, Plus, Trash2, TrendingUp, TrendingDown, Edit3, Check, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { fetchMultiQuote } from '../components/marketData';
 import { Link } from 'react-router-dom';
 import AddAssetDialog from '../components/portfolio/AddAssetDialog';
 import PortfolioSummary from '../components/portfolio/PortfolioSummary';
+import { useUserPrefs } from '@/lib/useUserPrefs';
 
 export default function Portfolio() {
   const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
-  const queryClient = useQueryClient();
 
-  const { data: holdings = [], isLoading: holdingsLoading } = useQuery({
-    queryKey: ['portfolio'],
-    queryFn: () => base44.entities.Portfolio.list('-created_date'),
-  });
+  const { portfolio, isLoading: prefsLoading, addToPortfolio, updatePortfolioItem, removeFromPortfolio } = useUserPrefs();
 
-  const symbols = [...new Set(holdings.map(h => h.symbol))];
+  const symbols = [...new Set(portfolio.map(h => h.symbol))];
   const { data: prices = {}, isLoading: pricesLoading } = useQuery({
     queryKey: ['multiQuote', symbols.join(',')],
     queryFn: () => fetchMultiQuote(symbols),
@@ -27,23 +23,9 @@ export default function Portfolio() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Portfolio.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['portfolio'] }),
-  });
+  const isLoading = prefsLoading || (symbols.length > 0 && pricesLoading);
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Portfolio.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
-      setEditingId(null);
-    },
-  });
-
-  const isLoading = holdingsLoading || (symbols.length > 0 && pricesLoading);
-
-  // Enrich holdings with live price data
-  const enriched = holdings.map(h => {
+  const enriched = portfolio.map(h => {
     const q = prices[h.symbol];
     const currentPrice = q?.price ?? 0;
     const totalCost = h.quantity * h.buy_price;
@@ -76,15 +58,13 @@ export default function Portfolio() {
         </button>
       </motion.div>
 
-      {/* Summary Card */}
       <PortfolioSummary enriched={enriched} isLoading={isLoading} />
 
-      {/* Holdings */}
       {isLoading ? (
         <div className="space-y-2">
           {[1,2,3].map(i => <div key={i} className="glass rounded-2xl h-20 animate-pulse" />)}
         </div>
-      ) : holdings.length === 0 ? (
+      ) : portfolio.length === 0 ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           className="glass rounded-2xl p-14 text-center border border-dashed border-white/10"
         >
@@ -109,7 +89,6 @@ export default function Portfolio() {
                 className="glass rounded-2xl p-4"
               >
                 {editingId === h.id ? (
-                  /* Inline Edit Row */
                   <div className="flex items-center gap-3 flex-wrap">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-white/5 flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-bold text-violet-300">{h.symbol.slice(0,2)}</span>
@@ -134,7 +113,7 @@ export default function Portfolio() {
                       </div>
                     </div>
                     <div className="flex gap-2 ml-auto">
-                      <button onClick={() => updateMutation.mutate({ id: h.id, data: { quantity: parseFloat(editForm.quantity), buy_price: parseFloat(editForm.buy_price) } })}
+                      <button onClick={() => updatePortfolioItem.mutate({ id: h.id, quantity: parseFloat(editForm.quantity), buy_price: parseFloat(editForm.buy_price) }, { onSuccess: () => setEditingId(null) })}
                         className="p-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition-all">
                         <Check className="w-4 h-4" />
                       </button>
@@ -144,7 +123,6 @@ export default function Portfolio() {
                     </div>
                   </div>
                 ) : (
-                  /* Normal Row */
                   <div className="flex items-center gap-3">
                     <Link to={`/Asset?symbol=${h.symbol}`} className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-white/5 flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-bold text-violet-300">{h.symbol.slice(0,2)}</span>
@@ -159,7 +137,6 @@ export default function Portfolio() {
                       </div>
                     </div>
 
-                    {/* Daily change */}
                     <div className="hidden sm:flex flex-col items-end">
                       <span className="text-[10px] text-white/25">Today</span>
                       <span className={`text-xs font-semibold flex items-center gap-0.5 ${h.positive ? 'text-gain' : 'text-loss'}`}>
@@ -168,13 +145,11 @@ export default function Portfolio() {
                       </span>
                     </div>
 
-                    {/* Current value */}
                     <div className="flex flex-col items-end">
                       <span className="text-sm font-bold text-white">${h.currentValue.toLocaleString('en-US', {maximumFractionDigits: 2})}</span>
                       <span className="text-[10px] text-white/30">${h.currentPrice.toLocaleString()}/unit</span>
                     </div>
 
-                    {/* P&L */}
                     <div className={`flex flex-col items-end min-w-[64px] px-2 py-1 rounded-lg ${h.pnl >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
                       <span className={`text-xs font-bold ${h.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {h.pnl >= 0 ? '+' : ''}${Math.abs(h.pnl).toLocaleString('en-US', {maximumFractionDigits: 2})}
@@ -188,7 +163,7 @@ export default function Portfolio() {
                       <button onClick={() => startEdit(h)} className="p-2 rounded-lg hover:bg-white/5 text-white/20 hover:text-violet-400 transition-all">
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => deleteMutation.mutate(h.id)} className="p-2 rounded-lg hover:bg-white/5 text-white/20 hover:text-rose-400 transition-all">
+                      <button onClick={() => removeFromPortfolio.mutate(h.id)} className="p-2 rounded-lg hover:bg-white/5 text-white/20 hover:text-rose-400 transition-all">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -200,7 +175,7 @@ export default function Portfolio() {
         </div>
       )}
 
-      <AddAssetDialog open={addOpen} onClose={() => setAddOpen(false)} existingSymbols={holdings.map(h => h.symbol)} />
+      <AddAssetDialog open={addOpen} onClose={() => setAddOpen(false)} existingSymbols={portfolio.map(h => h.symbol)} onAdd={(data) => addToPortfolio.mutate(data, { onSuccess: () => setAddOpen(false) })} />
     </div>
   );
 }
