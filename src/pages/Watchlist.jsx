@@ -3,13 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Star, Plus, Trash2, TrendingUp, TrendingDown, Search, Loader2, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { fetchMultiQuote } from '../components/marketData';
 import { Link } from 'react-router-dom';
 import MiniChart from '../components/dashboard/MiniChart';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { getDeviceId } from '@/lib/useDeviceId';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { useUserPrefs } from '@/lib/useUserPrefs';
 
 const POPULAR_SYMBOLS = [
   { symbol: 'AAPL', name: 'Apple Inc', type: 'stock' },
@@ -61,18 +61,13 @@ export default function Watchlist() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [orderedList, setOrderedList] = useState([]);
-  const queryClient = useQueryClient();
-  const deviceId = getDeviceId();
+  const [customLoading, setCustomLoading] = useState(false);
 
-  const { data: watchlist = [], isLoading: watchlistLoading } = useQuery({
-    queryKey: ['watchlist', deviceId],
-    queryFn: () => base44.entities.Watchlist.filter({ device_id: deviceId }, 'sort_order'),
-  });
+  const { watchlist, isLoading: prefsLoading, addToWatchlist, removeFromWatchlist, reorderWatchlist } = useUserPrefs();
 
   useEffect(() => {
     if (watchlist.length) {
-      const sorted = [...watchlist].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-      setOrderedList(sorted);
+      setOrderedList([...watchlist].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
     } else {
       setOrderedList([]);
     }
@@ -86,32 +81,7 @@ export default function Watchlist() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const isLoading = watchlistLoading || (symbols.length > 0 && pricesLoading);
-
-  const addMutation = useMutation({
-    mutationFn: (data) => base44.entities.Watchlist.create({
-      ...data,
-      device_id: deviceId,
-      sort_order: (orderedList.length > 0 ? Math.max(...orderedList.map(w => w.sort_order ?? 0)) : 0) + 1,
-    }),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
-      setDialogOpen(false);
-      setSearchQuery('');
-      toast.success(`${variables.symbol} added to watchlist`);
-    },
-    onError: (err) => toast.error('Failed to add: ' + (err?.message || 'Unknown error')),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Watchlist.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
-      toast.success('Removed from watchlist');
-    },
-  });
-
-  const [customLoading, setCustomLoading] = useState(false);
+  const isLoading = prefsLoading || (symbols.length > 0 && pricesLoading);
 
   const filteredSymbols = POPULAR_SYMBOLS.filter(s =>
     !orderedList.some(w => w.symbol === s.symbol) &&
@@ -121,6 +91,17 @@ export default function Watchlist() {
   const trimmed = searchQuery.trim().toUpperCase();
   const alreadyInWatchlist = orderedList.some(w => w.symbol === trimmed);
   const showCustomAdd = trimmed.length >= 1 && filteredSymbols.length === 0 && !alreadyInWatchlist;
+
+  const handleAdd = (symbol, name, asset_type) => {
+    addToWatchlist.mutate({ symbol, name, asset_type }, {
+      onSuccess: () => {
+        setDialogOpen(false);
+        setSearchQuery('');
+        toast.success(`${symbol} added to watchlist`);
+      },
+      onError: (err) => toast.error('Failed to add: ' + (err?.message || 'Unknown error')),
+    });
+  };
 
   const addCustomSymbol = async () => {
     if (!trimmed) return;
@@ -132,7 +113,7 @@ export default function Watchlist() {
       if (info?.name) name = info.name;
       if (['BTC','ETH','SOL','XRP','DOGE','ADA','DOT'].includes(trimmed) || trimmed.endsWith('-USD')) asset_type = 'crypto';
     } catch {}
-    addMutation.mutate({ symbol: trimmed, name, asset_type });
+    handleAdd(trimmed, name, asset_type);
     setCustomLoading(false);
   };
 
@@ -142,12 +123,7 @@ export default function Watchlist() {
     const [moved] = newList.splice(result.source.index, 1);
     newList.splice(result.destination.index, 0, moved);
     setOrderedList(newList);
-    await Promise.all(
-      newList.map((item, idx) =>
-        base44.entities.Watchlist.update(item.id, { sort_order: idx + 1 })
-      )
-    );
-    queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+    await reorderWatchlist(newList);
   };
 
   return (
@@ -230,7 +206,7 @@ export default function Watchlist() {
                             </div>
                           </Link>
 
-                          <button onClick={() => deleteMutation.mutate(item.id)}
+                          <button onClick={() => removeFromWatchlist.mutate(item.symbol)}
                             className="p-2 rounded-lg hover:bg-white/5 text-white/20 hover:text-rose-400 transition-all flex-shrink-0"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -264,11 +240,11 @@ export default function Watchlist() {
             </div>
             <div className="space-y-1 max-h-60 overflow-y-auto">
               {filteredSymbols.map(s => {
-                const isAdding = addMutation.isPending && addMutation.variables?.symbol === s.symbol;
+                const isAdding = addToWatchlist.isPending && addToWatchlist.variables?.symbol === s.symbol;
                 return (
                   <button key={s.symbol}
-                    onClick={() => addMutation.mutate({ symbol: s.symbol, name: s.name, asset_type: s.type })}
-                    disabled={addMutation.isPending}
+                    onClick={() => handleAdd(s.symbol, s.name, s.type)}
+                    disabled={addToWatchlist.isPending}
                     className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-all disabled:opacity-60"
                   >
                     <div className="flex items-center gap-3">
@@ -288,7 +264,7 @@ export default function Watchlist() {
               {showCustomAdd && (
                 <button
                   onClick={addCustomSymbol}
-                  disabled={customLoading || addMutation.isPending}
+                  disabled={customLoading || addToWatchlist.isPending}
                   className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-dashed border-white/10 transition-all"
                 >
                   <div className="flex items-center gap-3">
@@ -300,7 +276,7 @@ export default function Watchlist() {
                       <div className="text-[11px] text-white/30">Add custom symbol</div>
                     </div>
                   </div>
-                  {customLoading || addMutation.isPending
+                  {customLoading || addToWatchlist.isPending
                     ? <div className="w-4 h-4 border border-white/20 border-t-violet-400 rounded-full animate-spin" />
                     : <Plus className="w-4 h-4 text-violet-400" />}
                 </button>
