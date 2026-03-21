@@ -177,7 +177,19 @@ export default function Portfolio() {
         </div>
       )}
 
-      <AddAssetDialog open={addOpen} onClose={() => setAddOpen(false)} existingSymbols={portfolio.map(h => h.symbol)} onAdd={(data) => addToPortfolio.mutate(data, { onSuccess: () => setAddOpen(false) })} />
+      <AssetSearchDialog
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onSelect={(asset) => { setSelectedAsset(asset); setSearchOpen(false); }}
+        existingSymbols={portfolio.map(h => h.symbol)}
+        title="Add Position"
+      />
+      <AddAssetDialog
+        open={!!selectedAsset}
+        onClose={() => setSelectedAsset(null)}
+        asset={selectedAsset}
+        onAdd={(data) => addToPortfolio.mutate(data, { onSuccess: () => setSelectedAsset(null) })}
+      />
     </div>
   );
 }
