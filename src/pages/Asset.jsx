@@ -50,27 +50,12 @@ export default function Asset() {
   const priceReady = displayPrice != null;
 
   // Watchlist state
-  const deviceId = getDeviceId();
-
-  const { data: watchlist = [] } = useQuery({
-    queryKey: ['watchlist', deviceId],
-    queryFn: () => base44.entities.Watchlist.filter({ device_id: deviceId }, '-created_date'),
-  });
-  const watchlistItem = watchlist.find(w => w.symbol === symbol);
-  const isWatched = !!watchlistItem;
-
-  const addToWatchlist = useMutation({
-    mutationFn: () => base44.entities.Watchlist.create({ symbol, name: asset?.name || symbol, asset_type: symbol.includes('-') || ['BTC','ETH','SOL','XRP'].includes(symbol) ? 'crypto' : 'stock', device_id: deviceId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
-  });
-  const removeFromWatchlist = useMutation({
-    mutationFn: () => base44.entities.Watchlist.delete(watchlistItem?.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
-  });
+  const { watchlist, addToWatchlist, removeFromWatchlist } = useUserPrefs();
+  const isWatched = watchlist.some(w => w.symbol === symbol);
 
   const toggleWatchlist = () => {
-    if (isWatched) removeFromWatchlist.mutate();
-    else addToWatchlist.mutate();
+    if (isWatched) removeFromWatchlist.mutate(symbol);
+    else addToWatchlist.mutate({ symbol, name: asset?.name || symbol, asset_type: symbol.includes('-') || ['BTC','ETH','SOL','XRP'].includes(symbol) ? 'crypto' : 'stock' });
   };
 
   const positive = displayChange != null ? displayChange >= 0 : true;
