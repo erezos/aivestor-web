@@ -53,7 +53,7 @@ export default function Portfolio() {
           <p className="text-sm text-white/30">Track your investments with live P&L</p>
         </div>
         <button
-          onClick={() => setAddOpen(true)}
+          onClick={() => setSearchOpen(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-all"
         >
           <Plus className="w-4 h-4" /> Add Position
