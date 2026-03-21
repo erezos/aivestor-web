@@ -73,7 +73,7 @@ export default function Portfolio() {
           <PieChart className="w-10 h-10 text-white/10 mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-white/50 mb-1">No positions yet</h3>
           <p className="text-sm text-white/25 mb-5">Add your first investment to track performance</p>
-          <button onClick={() => setAddOpen(true)}
+          <button onClick={() => setSearchOpen(true)}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-all"
           >
             <Plus className="w-4 h-4" /> Add First Position
