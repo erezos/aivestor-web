@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, Users } from 'lucide-react';
 import KeyStats from '../components/asset/KeyStats';
 import { Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { fetchAssetData, fetchMultiQuote } from '../components/marketData';
 import TechnicalChart from '../components/asset/TechnicalChart';
 import { useUserPrefs } from '@/lib/useUserPrefs';
