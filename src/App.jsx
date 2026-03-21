@@ -10,7 +10,6 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import HotBoard from './pages/HotBoard';
 import Watchlist from './pages/Watchlist.jsx';
-import Portfolio from './pages/Portfolio';
 import Asset from './pages/Asset';
 import News from './pages/News';
 import Education from './pages/Education';
