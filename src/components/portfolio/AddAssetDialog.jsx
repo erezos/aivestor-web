@@ -1,156 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { base44 } from '@/api/base44Client';
-import { Search, Plus, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 
-const POPULAR = [
-  { symbol: 'AAPL', name: 'Apple Inc', type: 'stock' },
-  { symbol: 'NVDA', name: 'NVIDIA Corp', type: 'stock' },
-  { symbol: 'TSLA', name: 'Tesla Inc', type: 'stock' },
-  { symbol: 'MSFT', name: 'Microsoft Corp', type: 'stock' },
-  { symbol: 'AMZN', name: 'Amazon.com', type: 'stock' },
-  { symbol: 'META', name: 'Meta Platforms', type: 'stock' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc', type: 'stock' },
-  { symbol: 'AMD', name: 'AMD Inc', type: 'stock' },
-  { symbol: 'JPM', name: 'JPMorgan Chase', type: 'stock' },
-  { symbol: 'BTC', name: 'Bitcoin', type: 'crypto' },
-  { symbol: 'ETH', name: 'Ethereum', type: 'crypto' },
-  { symbol: 'SOL', name: 'Solana', type: 'crypto' },
-  { symbol: 'XRP', name: 'Ripple', type: 'crypto' },
-];
-
-export default function AddAssetDialog({ open, onClose, existingSymbols, onAdd }) {
-  const [step, setStep] = useState('pick');
-  const [selected, setSelected] = useState(null);
-  const [search, setSearch] = useState('');
+export default function AddAssetDialog({ open, onClose, asset, onAdd }) {
   const [qty, setQty] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const handleClose = () => {
-    setStep('pick'); setSelected(null); setSearch(''); setQty(''); setBuyPrice('');
-    onClose();
-  };
-
-  const handlePick = (asset) => { setSelected(asset); setStep('details'); };
+  useEffect(() => {
+    if (open) { setQty(''); setBuyPrice(''); }
+  }, [open]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
-    onAdd({
-      symbol: selected.symbol,
-      name: selected.name,
-      asset_type: selected.type,
-      quantity: parseFloat(qty),
-      buy_price: parseFloat(buyPrice),
-    });
-    setLoading(false);
-    handleClose();
+    onAdd({ ...asset, quantity: parseFloat(qty), buy_price: parseFloat(buyPrice) });
   };
 
-  const filtered = POPULAR.filter(s =>
-    !existingSymbols.includes(s.symbol) &&
-    (s.symbol.toLowerCase().includes(search.toLowerCase()) || s.name.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const searchUpper = search.trim().toUpperCase();
-  const showCustom = searchUpper.length > 0 && !POPULAR.some(s => s.symbol === searchUpper);
+  if (!asset) return null;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="bg-[#12121a] border-white/10 text-white max-w-md">
         <DialogHeader>
-          <DialogTitle>{step === 'pick' ? 'Add Position' : `Add ${selected?.symbol}`}</DialogTitle>
+          <DialogTitle>Add {asset.symbol}</DialogTitle>
         </DialogHeader>
 
-        {step === 'pick' ? (
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-              <input
-                placeholder="Search symbol or name… (e.g. MNDY)"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 outline-none focus:border-violet-500/50"
-              />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Asset preview */}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-violet-300">{asset.symbol.slice(0, 2)}</span>
             </div>
-            <div className="space-y-1 max-h-64 overflow-y-auto">
-              {showCustom && (
-                <button onClick={() => handlePick({ symbol: searchUpper, name: searchUpper, type: 'stock' })}
-                  className="w-full flex items-center justify-between p-3 rounded-xl bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 transition-all text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-violet-500/30 flex items-center justify-center">
-                      <span className="text-xs font-bold text-violet-300">{searchUpper.slice(0,2)}</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-violet-300">{searchUpper}</div>
-                      <div className="text-[11px] text-white/30">Add custom symbol</div>
-                    </div>
-                  </div>
-                  <Plus className="w-4 h-4 text-violet-400" />
-                </button>
-              )}
-              {filtered.map(s => (
-                <button key={s.symbol} onClick={() => handlePick(s)}
-                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-all text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
-                      <span className="text-xs font-bold text-violet-300">{s.symbol.slice(0,2)}</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold">{s.symbol}</div>
-                      <div className="text-[11px] text-white/30">{s.name}</div>
-                    </div>
-                  </div>
-                  <Plus className="w-4 h-4 text-white/20" />
-                </button>
-              ))}
-              {filtered.length === 0 && !showCustom && <p className="text-center text-sm text-white/25 py-8">Type a symbol to search</p>}
+            <div>
+              <div className="text-sm font-bold">{asset.symbol}</div>
+              <div className="text-[11px] text-white/30">{asset.name}</div>
             </div>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex items-center gap-3 p-3 glass rounded-xl">
-              <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center">
-                <span className="text-sm font-bold text-violet-300">{selected?.symbol.slice(0,2)}</span>
-              </div>
-              <div>
-                <div className="text-sm font-bold">{selected?.symbol}</div>
-                <div className="text-[11px] text-white/30">{selected?.name}</div>
-              </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-white/40 mb-1.5 block">Quantity / Units</label>
+              <input
+                type="number" step="any" required value={qty}
+                onChange={e => setQty(e.target.value)}
+                placeholder="e.g. 10"
+                autoFocus
+                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/25 outline-none focus:border-violet-500/50"
+              />
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-white/40 mb-1.5 block">Quantity / Units</label>
-                <input
-                  type="number" step="any" required value={qty} onChange={e => setQty(e.target.value)}
-                  placeholder="e.g. 10"
-                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/25 outline-none focus:border-violet-500/50"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-white/40 mb-1.5 block">Average Buy Price (USD)</label>
-                <input
-                  type="number" step="any" required value={buyPrice} onChange={e => setBuyPrice(e.target.value)}
-                  placeholder="e.g. 150.00"
-                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/25 outline-none focus:border-violet-500/50"
-                />
-              </div>
+            <div>
+              <label className="text-xs text-white/40 mb-1.5 block">Average Buy Price (USD)</label>
+              <input
+                type="number" step="any" required value={buyPrice}
+                onChange={e => setBuyPrice(e.target.value)}
+                placeholder="e.g. 150.00"
+                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/25 outline-none focus:border-violet-500/50"
+              />
             </div>
-            <div className="flex gap-2 pt-1">
-              <button type="button" onClick={() => setStep('pick')}
-                className="flex-1 py-2.5 rounded-xl glass text-white/50 text-sm font-medium hover:text-white/70 transition-all"
-              >Back</button>
-              <button type="submit" disabled={loading}
-                className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-all"
-              >
-                {loading ? 'Adding…' : <><Check className="w-4 h-4" /> Add Position</>}
-              </button>
-            </div>
-          </form>
-        )}
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl bg-white/5 text-white/50 text-sm font-medium hover:text-white/70 hover:bg-white/8 transition-all"
+            >
+              Back
+            </button>
+            <button type="submit"
+              className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+            >
+              <Check className="w-4 h-4" /> Add Position
+            </button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

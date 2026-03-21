@@ -1,31 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Star, Plus, Trash2, TrendingUp, TrendingDown, Search, Loader2, GripVertical } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Star, Plus, Trash2, TrendingUp, TrendingDown, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
-import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { fetchMultiQuote } from '../components/marketData';
 import { Link } from 'react-router-dom';
 import MiniChart from '../components/dashboard/MiniChart';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useUserPrefs } from '@/lib/useUserPrefs';
-
-const POPULAR_SYMBOLS = [
-  { symbol: 'AAPL', name: 'Apple Inc', type: 'stock' },
-  { symbol: 'NVDA', name: 'NVIDIA Corp', type: 'stock' },
-  { symbol: 'TSLA', name: 'Tesla Inc', type: 'stock' },
-  { symbol: 'MSFT', name: 'Microsoft Corp', type: 'stock' },
-  { symbol: 'AMZN', name: 'Amazon.com', type: 'stock' },
-  { symbol: 'META', name: 'Meta Platforms', type: 'stock' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc', type: 'stock' },
-  { symbol: 'AMD', name: 'AMD Inc', type: 'stock' },
-  { symbol: 'JPM', name: 'JPMorgan Chase', type: 'stock' },
-  { symbol: 'BTC', name: 'Bitcoin', type: 'crypto' },
-  { symbol: 'ETH', name: 'Ethereum', type: 'crypto' },
-  { symbol: 'SOL', name: 'Solana', type: 'crypto' },
-  { symbol: 'XRP', name: 'Ripple', type: 'crypto' },
-];
+import AssetSearchDialog from '../components/shared/AssetSearchDialog';
 
 function getMarketSession() {
   const now = new Date();
@@ -59,9 +42,7 @@ function MarketSessionBadge() {
 
 export default function Watchlist() {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [orderedList, setOrderedList] = useState([]);
-  const [customLoading, setCustomLoading] = useState(false);
 
   const { watchlist, isLoading: prefsLoading, addToWatchlist, removeFromWatchlist, reorderWatchlist } = useUserPrefs();
 
@@ -83,38 +64,14 @@ export default function Watchlist() {
 
   const isLoading = prefsLoading || (symbols.length > 0 && pricesLoading);
 
-  const filteredSymbols = POPULAR_SYMBOLS.filter(s =>
-    !orderedList.some(w => w.symbol === s.symbol) &&
-    (s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || s.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const trimmed = searchQuery.trim().toUpperCase();
-  const alreadyInWatchlist = orderedList.some(w => w.symbol === trimmed);
-  const showCustomAdd = trimmed.length >= 1 && filteredSymbols.length === 0 && !alreadyInWatchlist;
-
-  const handleAdd = (symbol, name, asset_type) => {
-    addToWatchlist.mutate({ symbol, name, asset_type }, {
-      onSuccess: () => {
-        setDialogOpen(false);
-        setSearchQuery('');
-        toast.success(`${symbol} added to watchlist`);
-      },
-      onError: (err) => toast.error('Failed to add: ' + (err?.message || 'Unknown error')),
-    });
-  };
-
-  const addCustomSymbol = async () => {
-    if (!trimmed) return;
-    setCustomLoading(true);
-    let name = trimmed, asset_type = 'stock';
-    try {
-      const res = await base44.functions.invoke('getMarketData', { type: 'multi', symbols: [trimmed] });
-      const info = res.data?.[trimmed];
-      if (info?.name) name = info.name;
-      if (['BTC','ETH','SOL','XRP','DOGE','ADA','DOT'].includes(trimmed) || trimmed.endsWith('-USD')) asset_type = 'crypto';
-    } catch {}
-    handleAdd(trimmed, name, asset_type);
-    setCustomLoading(false);
+  const handleAdd = (asset) => {
+    addToWatchlist.mutate(
+      { symbol: asset.symbol, name: asset.name, asset_type: asset.asset_type },
+      {
+        onSuccess: () => toast.success(`${asset.symbol} added to watchlist`),
+        onError: (err) => toast.error('Failed to add: ' + (err?.message || 'Unknown error')),
+      }
+    );
   };
 
   const onDragEnd = async (result) => {
@@ -223,68 +180,13 @@ export default function Watchlist() {
         </DragDropContext>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-[#12121a] border-white/10 text-white">
-          <DialogHeader>
-            <DialogTitle>Add to Watchlist</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-              <input
-                placeholder="Search symbols..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 outline-none focus:border-violet-500/50"
-              />
-            </div>
-            <div className="space-y-1 max-h-60 overflow-y-auto">
-              {filteredSymbols.map(s => {
-                const isAdding = addToWatchlist.isPending && addToWatchlist.variables?.symbol === s.symbol;
-                return (
-                  <button key={s.symbol}
-                    onClick={() => handleAdd(s.symbol, s.name, s.type)}
-                    disabled={addToWatchlist.isPending}
-                    className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-all disabled:opacity-60"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
-                        <span className="text-xs font-bold text-violet-300">{s.symbol.slice(0,2)}</span>
-                      </div>
-                      <div className="text-left">
-                        <div className="text-sm font-semibold">{s.symbol}</div>
-                        <div className="text-[11px] text-white/30">{s.name}</div>
-                      </div>
-                    </div>
-                    {isAdding ? <Loader2 className="w-4 h-4 text-violet-400 animate-spin" /> : <Plus className="w-4 h-4 text-white/30" />}
-                  </button>
-                );
-              })}
-              {filteredSymbols.length === 0 && !showCustomAdd && <p className="text-center text-white/30 text-sm py-6">No more symbols to add</p>}
-              {showCustomAdd && (
-                <button
-                  onClick={addCustomSymbol}
-                  disabled={customLoading || addToWatchlist.isPending}
-                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-dashed border-white/10 transition-all"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
-                      <span className="text-xs font-bold text-violet-300">{trimmed.slice(0,2)}</span>
-                    </div>
-                    <div className="text-left">
-                      <div className="text-sm font-semibold">{trimmed}</div>
-                      <div className="text-[11px] text-white/30">Add custom symbol</div>
-                    </div>
-                  </div>
-                  {customLoading || addToWatchlist.isPending
-                    ? <div className="w-4 h-4 border border-white/20 border-t-violet-400 rounded-full animate-spin" />
-                    : <Plus className="w-4 h-4 text-violet-400" />}
-                </button>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AssetSearchDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onSelect={handleAdd}
+        existingSymbols={orderedList.map(w => w.symbol)}
+        title="Add to Watchlist"
+      />
     </div>
   );
 }
