@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { base44 } from '@/api/base44Client';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, Check } from 'lucide-react';
 
 const POPULAR = [
@@ -20,41 +19,33 @@ const POPULAR = [
   { symbol: 'XRP', name: 'Ripple', type: 'crypto' },
 ];
 
-export default function AddAssetDialog({ open, onClose, existingSymbols }) {
-  const [step, setStep] = useState('pick'); // 'pick' | 'details'
+export default function AddAssetDialog({ open, onClose, existingSymbols, onAdd }) {
+  const [step, setStep] = useState('pick');
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState('');
   const [qty, setQty] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
-  const queryClient = useQueryClient();
-
-  const addMutation = useMutation({
-    mutationFn: (data) => base44.entities.Portfolio.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
-      handleClose();
-    },
-  });
+  const [loading, setLoading] = useState(false);
 
   const handleClose = () => {
     setStep('pick'); setSelected(null); setSearch(''); setQty(''); setBuyPrice('');
     onClose();
   };
 
-  const handlePick = (asset) => {
-    setSelected(asset);
-    setStep('details');
-  };
+  const handlePick = (asset) => { setSelected(asset); setStep('details'); };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    addMutation.mutate({
+    setLoading(true);
+    onAdd({
       symbol: selected.symbol,
       name: selected.name,
       asset_type: selected.type,
       quantity: parseFloat(qty),
       buy_price: parseFloat(buyPrice),
     });
+    setLoading(false);
+    handleClose();
   };
 
   const filtered = POPULAR.filter(s =>
@@ -84,7 +75,6 @@ export default function AddAssetDialog({ open, onClose, existingSymbols }) {
               />
             </div>
             <div className="space-y-1 max-h-64 overflow-y-auto">
-              {/* Custom symbol entry */}
               {showCustom && (
                 <button onClick={() => handlePick({ symbol: searchUpper, name: searchUpper, type: 'stock' })}
                   className="w-full flex items-center justify-between p-3 rounded-xl bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 transition-all text-left"
@@ -153,10 +143,10 @@ export default function AddAssetDialog({ open, onClose, existingSymbols }) {
               <button type="button" onClick={() => setStep('pick')}
                 className="flex-1 py-2.5 rounded-xl glass text-white/50 text-sm font-medium hover:text-white/70 transition-all"
               >Back</button>
-              <button type="submit" disabled={addMutation.isPending}
+              <button type="submit" disabled={loading}
                 className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-all"
               >
-                {addMutation.isPending ? 'Adding…' : <><Check className="w-4 h-4" /> Add Position</>}
+                {loading ? 'Adding…' : <><Check className="w-4 h-4" /> Add Position</>}
               </button>
             </div>
           </form>
