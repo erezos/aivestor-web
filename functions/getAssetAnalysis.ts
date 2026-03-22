@@ -153,9 +153,11 @@ Deno.serve(async (req) => {
       return Response.json({ ...data, price: livePrice || data.price, change: liveChange });
     }
 
-    // Stale cache → return stale immediately (skip background refresh to avoid auth loss)
+    // Stale cache → return stale data immediately, trigger background refresh
     if (cached && cacheAge >= CACHE_TTL_MS) {
       const staleData = JSON.parse(cached.data);
+      // Fire background refresh (don't await — return stale immediately)
+      bgRefreshAI(base44, cleanSym, isCrypto, livePrice, liveChange, cached).catch(() => {});
       return Response.json({ ...staleData, price: livePrice || staleData.price, change: liveChange });
     }
 
