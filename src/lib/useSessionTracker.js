@@ -126,8 +126,18 @@ export function useSessionTracker() {
 
     async function track(sessionDuration = 0) {
       try {
-        const user = await base44.auth.me();
-        if (!user) return; // anonymous — skip
+        // Get or create a persistent anonymous device ID
+        let deviceId = localStorage.getItem('aivestor_device_id');
+        if (!deviceId) {
+          deviceId = 'anon_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+          localStorage.setItem('aivestor_device_id', deviceId);
+        }
+
+        let userEmail = null;
+        try {
+          const user = await base44.auth.me();
+          userEmail = user?.email || null;
+        } catch {}
 
         const [geo, device] = await Promise.all([getGeoInfo(), Promise.resolve(getDeviceInfo())]);
         const { watchlist_size, watchlist_symbols } = getWatchlistInfo();
@@ -142,6 +152,8 @@ export function useSessionTracker() {
           watchlist_symbols,
           pages_visited,
           referrer: document.referrer || '',
+          device_id: deviceId,
+          user_email: userEmail,
           ...utmParams,
         }).catch(() => {});
       } catch {}
