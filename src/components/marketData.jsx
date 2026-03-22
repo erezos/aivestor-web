@@ -64,6 +64,9 @@ export async function fetchAssetData(symbol) {
 }
 
 // ─── 7. Earnings — reads per-date enriched chunks from DB ─────────────────────
+const VF_EXPAND = { H: 'High', M: 'Medium', L: 'Low' };
+const SB_EXPAND = { b: 'bullish', e: 'bearish', n: 'neutral' };
+
 function expandEarning(e, date) {
   if (e.symbol) return e; // legacy format
   return {
@@ -73,9 +76,9 @@ function expandEarning(e, date) {
     epsEstimate:        e.ep,
     revenueEstimate:    e.re,
     isNotable:          e.n === 1,
-    volatilityForecast: e.vf || 'Medium',
+    volatilityForecast: VF_EXPAND[e.vf] || e.vf || 'Medium',
     volatilityReason:   e.vr || 'Earnings report due',
-    sentimentBias:      e.sb || 'neutral',
+    sentimentBias:      SB_EXPAND[e.sb] || e.sb || 'neutral',
   };
 }
 
