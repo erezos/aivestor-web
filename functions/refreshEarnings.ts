@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     return Response.json({
       success: true,
       dates: dates.length,
-      total: filtered.length,
+      total,
       message: 'Raw data saved. enrichEarningsBatch will AI-enrich progressively every 5 min.',
     });
   } catch (err) {
