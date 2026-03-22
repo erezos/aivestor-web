@@ -128,6 +128,67 @@ const CRYPTO_LIST = [
   { symbol: 'VET', name: 'VeChain', asset_type: 'crypto', flag: 'V', country: 'Crypto' },
 ];
 
+// Suffix-based country resolution (Finnhub mic fields are often empty)
+const SUFFIX_MAP = [
+  { suffix: '.L',   flag: '🇬🇧', country: 'UK' },
+  { suffix: '.IL',  flag: '🇬🇧', country: 'UK' }, // London International
+  { suffix: '.T',   flag: '🇯🇵', country: 'JP' },
+  { suffix: '.DE',  flag: '🇩🇪', country: 'DE' },
+  { suffix: '.F',   flag: '🇩🇪', country: 'DE' },
+  { suffix: '.PA',  flag: '🇫🇷', country: 'FR' },
+  { suffix: '.AS',  flag: '🇳🇱', country: 'NL' },
+  { suffix: '.SW',  flag: '🇨🇭', country: 'CH' },
+  { suffix: '.TO',  flag: '🇨🇦', country: 'CA' },
+  { suffix: '.V',   flag: '🇨🇦', country: 'CA' },
+  { suffix: '.AX',  flag: '🇦🇺', country: 'AU' },
+  { suffix: '.BO',  flag: '🇮🇳', country: 'IN' },
+  { suffix: '.NS',  flag: '🇮🇳', country: 'IN' },
+  { suffix: '.KS',  flag: '🇰🇷', country: 'KR' },
+  { suffix: '.KQ',  flag: '🇰🇷', country: 'KR' },
+  { suffix: '.SA',  flag: '🇧🇷', country: 'BR' },
+  { suffix: '.MX',  flag: '🇲🇽', country: 'MX' },
+  { suffix: '.MC',  flag: '🇪🇸', country: 'ES' },
+  { suffix: '.MI',  flag: '🇮🇹', country: 'IT' },
+  { suffix: '.ST',  flag: '🇸🇪', country: 'SE' },
+  { suffix: '.OL',  flag: '🇳🇴', country: 'NO' },
+  { suffix: '.CO',  flag: '🇩🇰', country: 'DK' },
+  { suffix: '.HE',  flag: '🇫🇮', country: 'FI' },
+  { suffix: '.BR',  flag: '🇧🇪', country: 'BE' },
+  { suffix: '.LS',  flag: '🇵🇹', country: 'PT' },
+  { suffix: '.WA',  flag: '🇵🇱', country: 'PL' },
+  { suffix: '.IS',  flag: '🇹🇷', country: 'TR' },
+  { suffix: '.AT',  flag: '🇬🇷', country: 'GR' },
+  { suffix: '.SI',  flag: '🇸🇬', country: 'SG' },
+  { suffix: '.TW',  flag: '🇹🇼', country: 'TW' },
+  { suffix: '.TA',  flag: '🇮🇱', country: 'IL' },
+  { suffix: '.JO',  flag: '🇿🇦', country: 'ZA' },
+  { suffix: '.SR',  flag: '🇸🇦', country: 'SA' },
+  { suffix: '.DU',  flag: '🇦🇪', country: 'AE' },
+  { suffix: '.AD',  flag: '🇦🇪', country: 'AE' },
+  { suffix: '.BA',  flag: '🇦🇷', country: 'AR' },
+  { suffix: '.BK',  flag: '🇹🇭', country: 'TH' },
+  { suffix: '.KL',  flag: '🇲🇾', country: 'MY' },
+  { suffix: '.JK',  flag: '🇮🇩', country: 'ID' },
+  { suffix: '.NZ',  flag: '🇳🇿', country: 'NZ' },
+  { suffix: '.VI',  flag: '🇦🇹', country: 'AT' },
+  { suffix: '.PR',  flag: '🇨🇿', country: 'CZ' },
+  { suffix: '.BD',  flag: '🇭🇺', country: 'HU' },
+  { suffix: '.HK',  flag: '🇭🇰', country: 'HK' },
+  { suffix: '.SS',  flag: '🇨🇳', country: 'CN' },
+  { suffix: '.SZ',  flag: '🇨🇳', country: 'CN' },
+];
+
+function resolveLocation(symbol, mic) {
+  // Try MIC first
+  if (mic && MIC_MAP[mic]) return MIC_MAP[mic];
+  // Try symbol suffix
+  for (const s of SUFFIX_MAP) {
+    if (symbol.endsWith(s.suffix)) return { flag: s.flag, country: s.country };
+  }
+  // Default: plain symbols without suffix are US markets
+  return { flag: '🇺🇸', country: 'US' };
+}
+
 const POPULAR_DEFAULTS = [
   { symbol: 'AAPL', name: 'Apple Inc', asset_type: 'stock', flag: '🇺🇸', country: 'US' },
   { symbol: 'NVDA', name: 'NVIDIA Corp', asset_type: 'stock', flag: '🇺🇸', country: 'US' },
