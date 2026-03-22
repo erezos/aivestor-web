@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
     // Cap each day at 40 companies — notable first, then alphabetical
     for (const date of dates) {
-      byDate[date].sort((a, b) => b.n - a.n || a.s.localeCompare(b.s));
+      byDate[date].sort((a, b) => b.n - a.n || (parseFloat(b.re) || 0) - (parseFloat(a.re) || 0) || a.s.localeCompare(b.s));
       byDate[date] = byDate[date].slice(0, 40);
     }
 
