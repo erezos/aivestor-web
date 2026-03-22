@@ -46,9 +46,8 @@ Deno.serve(async (req) => {
       if (!byDate[e.date]) byDate[e.date] = [];
       byDate[e.date].push({
         s:  e.symbol,
-        d:  e.date,
         t:  e.hour === 'bmo' ? 'BMO' : e.hour === 'amc' ? 'AMC' : 'DMH',
-        ep: e.epsEstimate  ?? null,
+        ep: e.epsEstimate != null ? Math.round(e.epsEstimate * 100) / 100 : null,
         re: e.revenueEstimate ? `${(e.revenueEstimate / 1e9).toFixed(1)}B` : null,
         n:  NOTABLE.has(e.symbol) ? 1 : 0,
       });
