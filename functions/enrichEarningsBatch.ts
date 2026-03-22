@@ -107,19 +107,21 @@ Deno.serve(async (req) => {
       Object.assign(aiMap, batchMap);
     }
 
-    // Merge AI data into companies
+    // Compress: vf → H/M/L, sb → b/e/n, vr capped at 20 chars, no d field (date in cache key)
+    const VF_MAP = { High: 'H', Medium: 'M', Low: 'L' };
+    const SB_MAP = { bullish: 'b', bearish: 'e', neutral: 'n' };
+
     const enriched = companies.map(e => {
       const ai = aiMap[e.s] || { volatilityForecast: 'Medium', volatilityReason: 'Earnings report due', sentimentBias: 'neutral' };
       return {
         s:  e.s,
-        d:  e.d,
         t:  e.t,
         ep: e.ep,
         re: e.re,
         n:  NOTABLE.has(e.s) ? 1 : 0,
-        vf: ai.volatilityForecast,
-        vr: (ai.volatilityReason || '').slice(0, 40),
-        sb: ai.sentimentBias,
+        vf: VF_MAP[ai.volatilityForecast] || 'M',
+        vr: (ai.volatilityReason || '').slice(0, 20),
+        sb: SB_MAP[ai.sentimentBias] || 'n',
       };
     });
 
