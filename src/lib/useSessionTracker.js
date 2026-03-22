@@ -83,6 +83,32 @@ function getVisitedPages() {
   }
 }
 
+// ── Bot Detection ────────────────────────────────────────────────────────────
+const BOT_PATTERNS = [
+  /GPTBot/i, /ChatGPT-User/i, /OAI-SearchBot/i,
+  /ClaudeBot/i, /Claude-Web/i,
+  /Googlebot/i, /Google-Extended/i,
+  /Bingbot/i, /PerplexityBot/i, /YouBot/i,
+  /FacebookBot/i, /Twitterbot/i, /LinkedInBot/i,
+  /Applebot/i, /DuckDuckBot/i, /Bytespider/i,
+  /PetalBot/i, /SemrushBot/i, /AhrefsBot/i,
+  /bot|crawler|spider|scraper/i,
+];
+
+function isBot(ua) {
+  return BOT_PATTERNS.some(p => p.test(ua));
+}
+
+export function trackBotIfNeeded() {
+  const ua = navigator.userAgent;
+  if (!isBot(ua)) return;
+  base44.functions.invoke('trackBotVisit', {
+    user_agent: ua,
+    page: window.location.pathname,
+    referrer: document.referrer || '',
+  }).catch(() => {});
+}
+
 export function trackPageView(page) {
   try {
     const existing = getVisitedPages();
