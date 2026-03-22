@@ -98,26 +98,29 @@ export default function AssetSearchDialog({ open, onClose, onSelect, existingSym
           <div className="space-y-0.5 max-h-72 overflow-y-auto pr-1">
             {filtered.map(asset => {
               const badge = TYPE_BADGE[asset.asset_type] || TYPE_BADGE.stock;
-              return (
-                <button
-                  key={asset.symbol}
-                  onClick={() => { onSelect(asset); onClose(); }}
-                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-all text-left group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-bold text-violet-300">{asset.symbol.slice(0, 2)}</span>
+                return (
+                  <button
+                    key={asset.symbol}
+                    onClick={() => { onSelect(asset); onClose(); }}
+                    className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-all text-left group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <AssetIcon asset={asset} />
+                      <div className="text-left">
+                        <div className="text-sm font-semibold group-hover:text-violet-300 transition-colors">{asset.symbol}</div>
+                        <div className="text-[11px] text-white/30 truncate max-w-[180px]">{asset.name}</div>
+                      </div>
                     </div>
-                    <div className="text-left">
-                      <div className="text-sm font-semibold group-hover:text-violet-300 transition-colors">{asset.symbol}</div>
-                      <div className="text-[11px] text-white/30 truncate max-w-[220px]">{asset.name}</div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {asset.country && asset.asset_type !== 'crypto' && (
+                        <span className="text-[10px] text-white/25 font-mono">{asset.country}</span>
+                      )}
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>
+                        {badge.label}
+                      </span>
                     </div>
-                  </div>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${badge.cls}`}>
-                    {badge.label}
-                  </span>
-                </button>
-              );
+                  </button>
+                );
             })}
 
             {!loading && filtered.length === 0 && query && (
