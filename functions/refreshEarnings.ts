@@ -24,11 +24,12 @@ Deno.serve(async (req) => {
     const json = res.ok ? await res.json() : null;
     const calendar = json?.earningsCalendar || [];
 
-    // Cap at 60 to keep payload size manageable
+    // Only keep notable companies — keeps payload small and these are what users care about
+    // Include any company with an EPS estimate (analyst-covered = meaningful)
     const filtered = calendar
-      .filter(e => e.symbol && e.date)
+      .filter(e => e.symbol && e.date && (NOTABLE.has(e.symbol) || e.epsEstimate != null))
       .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 60);
+      .slice(0, 40);
 
     if (!filtered.length) {
       return Response.json({ success: true, count: 0, note: 'No earnings in next 6 weeks' });
