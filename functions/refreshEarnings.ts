@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
 
     const today    = new Date().toISOString().slice(0, 10);
-    const in4weeks = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
+    const in4weeks = new Date(Date.now() + 42 * 86400000).toISOString().slice(0, 10);
 
     // Real earnings calendar from Finnhub — ALL companies, no filter
     const res  = await fetch(`https://finnhub.io/api/v1/calendar/earnings?from=${today}&to=${in4weeks}&token=${FINNHUB_KEY}`);
@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
       .slice(0, 100);
 
     if (!filtered.length) {
-      return Response.json({ success: true, count: 0, note: 'No earnings in next 4 weeks' });
+      return Response.json({ success: true, count: 0, note: 'No earnings in next 6 weeks' });
     }
 
     // Only AI-enrich the notable companies (keeps cost/latency reasonable)
