@@ -13,8 +13,17 @@
  */
 
 import { useState, useCallback } from 'react';
+import { base44 } from '@/api/base44Client';
 
 const STORAGE_KEY = 'aivestor_watchlist';
+
+// Fire-and-forget background sync to DB (analytics only, never blocks UX)
+function shadowSync(list) {
+  base44.auth.me().then(user => {
+    if (!user) return; // anonymous — skip
+    base44.functions.invoke('syncWatchlist', { items: list }).catch(() => {});
+  }).catch(() => {});
+}
 
 function loadFromStorage() {
   try {
