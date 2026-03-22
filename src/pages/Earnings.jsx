@@ -85,7 +85,14 @@ export default function Earnings() {
             <CalendarDays className="w-6 h-6 text-violet-400" />
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Earnings Calendar</h1>
           </div>
-          <p className="text-sm text-white/30">AI volatility forecasts · {earnings.length} companies tracked</p>
+          <p className="text-sm text-white/30">
+            AI volatility forecasts ·{' '}
+            {meta ? (
+              meta.completed
+                ? `${meta.total} companies · fully enriched`
+                : `${meta.enriched_dates?.length || 0}/${meta.dates?.length || 0} dates AI-enriched`
+            ) : `${earnings.length} companies`}
+          </p>
         </div>
         <button onClick={() => refetch()} disabled={isFetching} className="p-2 rounded-xl glass glass-hover transition-all">
           <RefreshCw className={`w-4 h-4 text-white/40 ${isFetching ? 'animate-spin' : ''}`} />
