@@ -26,6 +26,14 @@ export default function Layout() {
   const { data: currentUser } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
   const isAdmin = currentUser?.role === 'admin';
 
+  // Silent session tracking
+  useSessionTracker();
+
+  // Track page views on navigation
+  useEffect(() => {
+    trackPageView(location.pathname);
+  }, [location.pathname]);
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
       <style>{`
