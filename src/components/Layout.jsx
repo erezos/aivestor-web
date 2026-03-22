@@ -29,6 +29,9 @@ export default function Layout() {
   // Silent session tracking
   useSessionTracker();
 
+  // Detect & log AI crawlers / bots (no auth needed)
+  useEffect(() => { trackBotIfNeeded(); }, []);
+
   // Track page views on navigation
   useEffect(() => {
     trackPageView(location.pathname);
