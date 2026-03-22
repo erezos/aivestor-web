@@ -63,10 +63,9 @@ export async function fetchAssetData(symbol) {
   return res.data || {};
 }
 
-// ─── 7. Earnings — reads from DB cache (populated by scheduler daily) ────────
+// ─── 7. Earnings — reads per-date enriched chunks from DB ─────────────────────
 function expandEarning(e) {
-  // Support both old full-key format and new compact format
-  if (e.symbol) return e;
+  if (e.symbol) return e; // legacy format
   return {
     symbol:             e.s,
     reportDate:         e.d,
@@ -74,20 +73,57 @@ function expandEarning(e) {
     epsEstimate:        e.ep,
     revenueEstimate:    e.re,
     isNotable:          e.n === 1,
-    volatilityForecast: e.vf,
-    volatilityReason:   e.vr,
-    sentimentBias:      e.sb,
+    volatilityForecast: e.vf || 'Medium',
+    volatilityReason:   e.vr || 'Earnings report due',
+    sentimentBias:      e.sb || 'neutral',
   };
 }
 
+// Fetch earnings for a specific date range (array of YYYY-MM-DD strings)
+// Falls back to raw data if AI enrichment hasn't run yet for that date
+export async function fetchEarningsForDates(dates) {
+  const results = [];
+  for (const date of dates) {
+    // Try enriched first, then raw fallback
+    const enriched = await base44.entities.CachedData.filter({ cache_key: `earnings_${date}` });
+    if (enriched.length > 0 && enriched[0].data) {
+      const arr = JSON.parse(enriched[0].data).map(expandEarning);
+      results.push(...arr);
+      continue;
+    }
+    const raw = await base44.entities.CachedData.filter({ cache_key: `earnings_raw_${date}` });
+    if (raw.length > 0 && raw[0].data) {
+      const arr = JSON.parse(raw[0].data).map(e => ({
+        ...expandEarning(e),
+        volatilityForecast: 'Medium',
+        volatilityReason:   'Analysis pending…',
+        sentimentBias:      'neutral',
+      }));
+      results.push(...arr);
+    }
+  }
+  return results;
+}
+
+// Fetch the earnings meta (progress info)
+export async function fetchEarningsMeta() {
+  const rows = await base44.entities.CachedData.filter({ cache_key: 'earnings_meta' });
+  if (rows.length > 0 && rows[0].data) return JSON.parse(rows[0].data);
+  return null;
+}
+
+// Legacy: fetch all earnings (used by old code)
 export async function fetchEarnings() {
-  const rows = await base44.entities.CachedData.filter({ cache_key: 'earnings' });
-  if (rows.length > 0 && rows[0].data) return JSON.parse(rows[0].data).map(expandEarning);
-  // First ever load — trigger refresh on-demand
-  await base44.functions.invoke('refreshEarnings', {});
-  const fresh = await base44.entities.CachedData.filter({ cache_key: 'earnings' });
-  if (fresh.length > 0) return JSON.parse(fresh[0].data).map(expandEarning);
-  return [];
+  const meta = await fetchEarningsMeta();
+  if (!meta) return [];
+  const allResults = [];
+  for (const date of meta.dates || []) {
+    const enriched = await base44.entities.CachedData.filter({ cache_key: `earnings_${date}` });
+    if (enriched.length > 0 && enriched[0].data) {
+      allResults.push(...JSON.parse(enriched[0].data).map(expandEarning));
+    }
+  }
+  return allResults;
 }
 
 // ─── 8. Multi-symbol price batch — for Watchlist & Portfolio pages ────────────
