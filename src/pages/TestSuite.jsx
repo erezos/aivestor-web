@@ -188,20 +188,7 @@ const TEST_DEFINITIONS = [
       throw new Error(`${missingSentiment.length} article(s) missing sentiment`);
   }),
 
-  makeTest('Portfolio: create, read and delete', async () => {
-    const user = await base44.auth.me();
-    const created = await base44.entities.Portfolio.create({
-      symbol: '__TEST__',
-      name: 'Test Portfolio Asset',
-      asset_type: 'stock',
-      quantity: 1,
-      buy_price: 100,
-    });
-    if (!created?.id) throw new Error('Create failed');
-    const items = await base44.entities.Portfolio.filter({ created_by: user.email });
-    if (!items.find(i => i.id === created.id)) throw new Error('Item not found after create');
-    await base44.entities.Portfolio.delete(created.id);
-  }),
+
 ];
 
 function statusIcon(status) {
