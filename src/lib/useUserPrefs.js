@@ -44,6 +44,7 @@ export function useUserPrefs() {
   const persist = useCallback((list) => {
     setWatchlist(list);
     saveToStorage(list);
+    shadowSync(list); // async background sync — non-blocking
   }, []);
 
   const addToWatchlist = {
