@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Zap, TrendingUp, TrendingDown, Clock, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { fetchEarnings } from '../components/marketData';
+import { fetchEarningsForDates, fetchEarningsMeta } from '../components/marketData';
 
 const VOL = {
   High:   { color: 'text-rose-400',    bg: 'bg-rose-500/15',    border: 'border-rose-500/30',    dot: 'bg-rose-400' },
