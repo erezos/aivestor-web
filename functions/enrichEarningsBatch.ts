@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
         re: e.re,
         n:  NOTABLE.has(e.s) ? 1 : 0,
         vf: ai.volatilityForecast,
-        vr: ai.volatilityReason,
+        vr: (ai.volatilityReason || '').slice(0, 40),
         sb: ai.sentimentBias,
       };
     });
