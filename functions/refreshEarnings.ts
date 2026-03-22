@@ -67,10 +67,12 @@ Deno.serve(async (req) => {
       await upsert(base44, `earnings_raw_${date}`, byDate[date]);
     }
 
+    const total = Object.values(byDate).reduce((sum, arr) => sum + arr.length, 0);
+
     // Save/reset meta — enrichEarningsBatch reads this to know what to process
     await upsert(base44, 'earnings_meta', {
       dates,
-      total: filtered.length,
+      total,
       cursor: 0,
       enriched_dates: [],
       completed: false,
