@@ -64,11 +64,11 @@ export async function fetchAssetData(symbol) {
 }
 
 // ─── 7. Earnings — reads per-date enriched chunks from DB ─────────────────────
-function expandEarning(e) {
+function expandEarning(e, date) {
   if (e.symbol) return e; // legacy format
   return {
     symbol:             e.s,
-    reportDate:         e.d,
+    reportDate:         e.d || date,
     reportTime:         e.t,
     epsEstimate:        e.ep,
     revenueEstimate:    e.re,
