@@ -63,14 +63,30 @@ export async function fetchAssetData(symbol) {
   return res.data || {};
 }
 
-// ─── 7. Earnings — reads from DB cache (populated by scheduler every 6 hours) ─
+// ─── 7. Earnings — reads from DB cache (populated by scheduler daily) ────────
+function expandEarning(e) {
+  // Support both old full-key format and new compact format
+  if (e.symbol) return e;
+  return {
+    symbol:             e.s,
+    reportDate:         e.d,
+    reportTime:         e.t,
+    epsEstimate:        e.ep,
+    revenueEstimate:    e.re,
+    isNotable:          e.n === 1,
+    volatilityForecast: e.vf,
+    volatilityReason:   e.vr,
+    sentimentBias:      e.sb,
+  };
+}
+
 export async function fetchEarnings() {
   const rows = await base44.entities.CachedData.filter({ cache_key: 'earnings' });
-  if (rows.length > 0 && rows[0].data) return JSON.parse(rows[0].data);
+  if (rows.length > 0 && rows[0].data) return JSON.parse(rows[0].data).map(expandEarning);
   // First ever load — trigger refresh on-demand
   await base44.functions.invoke('refreshEarnings', {});
   const fresh = await base44.entities.CachedData.filter({ cache_key: 'earnings' });
-  if (fresh.length > 0) return JSON.parse(fresh[0].data);
+  if (fresh.length > 0) return JSON.parse(fresh[0].data).map(expandEarning);
   return [];
 }
 
