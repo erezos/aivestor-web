@@ -22,7 +22,7 @@ const DAYS = ['Mon','Tue','Wed','Thu','Fri'];
 function getWeekStart(offset = 0) {
   const d = new Date();
   const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
+  const diff = day === 0 ? 1 : 1 - day;
   d.setDate(d.getDate() + diff + offset * 7);
   d.setHours(0,0,0,0);
   return d;
