@@ -168,15 +168,13 @@ Deno.serve(async (req) => {
       .filter(r => ['Common Stock', 'ETP', 'ETF'].includes(r.type) && r.displaySymbol)
       .slice(0, 15)
       .map(r => {
-        const mic = r.primaryExchange || r.mic || '';
-        const location = MIC_MAP[mic] || { country: '', flag: '🌐' };
+        const location = resolveLocation(r.displaySymbol, r.primaryExchange || r.mic || '');
         return {
           symbol: r.displaySymbol,
           name: r.description,
           asset_type: ['ETP', 'ETF'].includes(r.type) ? 'etf' : 'stock',
           flag: location.flag,
           country: location.country,
-          mic,
         };
       });
 
