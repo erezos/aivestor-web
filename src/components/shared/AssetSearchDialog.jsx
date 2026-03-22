@@ -9,6 +9,24 @@ const TYPE_BADGE = {
   etf:    { label: 'ETF',    cls: 'bg-violet-500/10 text-violet-400' },
 };
 
+function AssetIcon({ asset }) {
+  if (asset.asset_type === 'crypto') {
+    return (
+      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/20 flex items-center justify-center flex-shrink-0 text-sm font-bold text-amber-300">
+        {asset.flag || asset.symbol.slice(0, 1)}
+      </div>
+    );
+  }
+  return (
+    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-white/5 flex items-center justify-center flex-shrink-0 relative">
+      <span className="text-xs font-bold text-violet-300">{asset.symbol.slice(0, 2)}</span>
+      {asset.flag && (
+        <span className="absolute -bottom-1 -right-1 text-[11px] leading-none drop-shadow-sm">{asset.flag}</span>
+      )}
+    </div>
+  );
+}
+
 export default function AssetSearchDialog({ open, onClose, onSelect, existingSymbols = [], title = 'Search Assets' }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
