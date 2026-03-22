@@ -188,6 +188,74 @@ const TEST_DEFINITIONS = [
       throw new Error(`${missingSentiment.length} article(s) missing sentiment`);
   }),
 
+  // ── Market Wrap ───────────────────────────────────────────────────────────
+  makeTest('MarketWrap: generateMarketWrap function returns headline', async () => {
+    const res = await base44.functions.invoke('generateMarketWrap', {});
+    if (!res.data?.headline) throw new Error('No headline in response: ' + JSON.stringify(res.data));
+  }),
+
+  makeTest('MarketWrap: cached data is stored in CachedData entity', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const rows = await base44.entities.CachedData.filter({ cache_key: `market_wrap_${today}` });
+    if (!rows.length) throw new Error(`No cache entry found for market_wrap_${today}`);
+    const wrap = JSON.parse(rows[0].data);
+    if (!wrap.headline) throw new Error('Cached wrap missing headline');
+    if (!wrap.intro_paragraph) throw new Error('Cached wrap missing intro_paragraph');
+    if (!wrap.date) throw new Error('Cached wrap missing date');
+  }),
+
+  makeTest('MarketWrap: wrap contains all required sections', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const rows = await base44.entities.CachedData.filter({ cache_key: `market_wrap_${today}` });
+    if (!rows.length) throw new Error('No cached wrap found — run generateMarketWrap first');
+    const wrap = JSON.parse(rows[0].data);
+    if (!wrap.equities_section) throw new Error('Missing equities_section');
+    if (!wrap.crypto_section) throw new Error('Missing crypto_section');
+    if (!wrap.ai_insight) throw new Error('Missing ai_insight');
+  }),
+
+  // ── Asset Profile ─────────────────────────────────────────────────────────
+  makeTest('AssetProfile: generateAssetProfile returns profile for AAPL', async () => {
+    const res = await base44.functions.invoke('generateAssetProfile', { symbol: 'AAPL' });
+    if (!res.data?.overview) throw new Error('No overview in AAPL profile');
+    if (!res.data?.moat) throw new Error('No moat in AAPL profile');
+    if (!res.data?.risks) throw new Error('No risks in AAPL profile');
+    if (!res.data?.generated_at) throw new Error('No generated_at timestamp');
+    if (!res.data?.next_refresh) throw new Error('No next_refresh date');
+  }),
+
+  makeTest('AssetProfile: generateAssetProfile works for BTC (crypto)', async () => {
+    const res = await base44.functions.invoke('generateAssetProfile', { symbol: 'BTC' });
+    if (!res.data?.overview) throw new Error('No overview in BTC profile');
+    if (!res.data?.risks) throw new Error('No risks in BTC profile');
+  }),
+
+  makeTest('AssetProfile: cache is populated after generation', async () => {
+    const rows = await base44.entities.CachedData.filter({ cache_key: 'asset_profile_AAPL' });
+    if (!rows.length) throw new Error('No cached profile for AAPL — run generateAssetProfile first');
+    const profile = JSON.parse(rows[0].data);
+    if (!profile.overview) throw new Error('Cached AAPL profile missing overview');
+    if (!profile.next_refresh) throw new Error('Cached AAPL profile missing next_refresh');
+  }),
+
+  makeTest('AssetProfile: cache hit returns fromCache=true (no LLM re-call)', async () => {
+    // Hit the endpoint twice — second call should be from cache
+    await base44.functions.invoke('generateAssetProfile', { symbol: 'MSFT' });
+    const res2 = await base44.functions.invoke('generateAssetProfile', { symbol: 'MSFT' });
+    if (!res2.data?.fromCache) throw new Error('Second call did not return from cache (wasting credits)');
+  }),
+
+  makeTest('EmailSubscriber: can subscribe an email', async () => {
+    const testEmail = '__test_subscriber__@aivestor.test';
+    // Clean up any previous test record
+    const existing = await base44.entities.EmailSubscriber.filter({ email: testEmail });
+    for (const r of existing) await base44.entities.EmailSubscriber.delete(r.id);
+    // Create
+    const rec = await base44.entities.EmailSubscriber.create({ email: testEmail, source: 'test_suite' });
+    if (!rec.id) throw new Error('Subscriber record not created');
+    // Cleanup
+    await base44.entities.EmailSubscriber.delete(rec.id);
+  }),
 
 ];
 
