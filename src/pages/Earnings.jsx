@@ -44,18 +44,26 @@ export default function Earnings() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selected, setSelected] = useState(null);
 
-  const { data: earnings = [], isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['earnings'],
-    queryFn: fetchEarnings,
-    staleTime: 30 * 60 * 1000,
-    retry: 1,
-  });
-
   const weekStart = getWeekStart(weekOffset);
   const weekDays = Array.from({ length: 5 }, (_, i) => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + i);
     return { date: toDateStr(d), label: DAYS[i], display: formatHeaderDate(d), d };
+  });
+
+  const weekDates = weekDays.map(d => d.date);
+
+  const { data: meta } = useQuery({
+    queryKey: ['earnings_meta'],
+    queryFn: fetchEarningsMeta,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: earnings = [], isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['earnings', weekDates.join(',')],
+    queryFn: () => fetchEarningsForDates(weekDates),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 
   const byDate = earnings.reduce((acc, e) => {
