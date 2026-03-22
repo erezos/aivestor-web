@@ -52,6 +52,18 @@ export default function MarketWrap() {
     e.preventDefault();
     if (!email) return;
     await base44.entities.EmailSubscriber.create({ email, source: 'market_wrap' });
+
+    // Link this email to their anonymous UserAnalytics record
+    try {
+      const deviceId = localStorage.getItem('aivestor_device_id');
+      if (deviceId) {
+        const rows = await base44.entities.UserAnalytics.filter({ user_email: deviceId });
+        if (rows.length > 0) {
+          await base44.entities.UserAnalytics.update(rows[0].id, { user_email: email });
+        }
+      }
+    } catch {}
+
     setSubscribed(true);
     setEmail('');
   };
