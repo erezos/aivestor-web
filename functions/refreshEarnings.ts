@@ -80,15 +80,15 @@ Respond only with: {"analysis":[{"sym":"...","volatilityForecast":"...","volatil
     const earnings = filtered.map(e => {
       const ai = aiMap[e.symbol] || { volatilityForecast: 'Medium', volatilityReason: 'Earnings report due', sentimentBias: 'neutral' };
       return {
-        symbol:             e.symbol,
-        reportDate:         e.date,
-        reportTime:         e.hour === 'bmo' ? 'BMO' : e.hour === 'amc' ? 'AMC' : 'DMH',
-        epsEstimate:        e.epsEstimate    ?? null,
-        revenueEstimate:    e.revenueEstimate ? `${(e.revenueEstimate/1e9).toFixed(1)}B` : null,
-        isNotable:          NOTABLE.has(e.symbol),
-        volatilityForecast: ai.volatilityForecast,
-        volatilityReason:   ai.volatilityReason,
-        sentimentBias:      ai.sentimentBias,
+        s:  e.symbol,
+        d:  e.date,
+        t:  e.hour === 'bmo' ? 'BMO' : e.hour === 'amc' ? 'AMC' : 'DMH',
+        ep: e.epsEstimate ?? null,
+        re: e.revenueEstimate ? `${(e.revenueEstimate/1e9).toFixed(1)}B` : null,
+        n:  NOTABLE.has(e.symbol) ? 1 : 0,
+        vf: ai.volatilityForecast,
+        vr: ai.volatilityReason,
+        sb: ai.sentimentBias,
       };
     });
 
