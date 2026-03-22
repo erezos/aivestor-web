@@ -15,6 +15,7 @@ import News from './pages/News';
 import Education from './pages/Education';
 import Earnings from './pages/Earnings';
 import TestSuite from './pages/TestSuite';
+import MarketWrap from './pages/MarketWrap';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -51,6 +52,7 @@ const AuthenticatedApp = () => {
         <Route path="/Education" element={<Education />} />
         <Route path="/Earnings" element={<Earnings />} />
         <Route path="/TestSuite" element={<TestSuite />} />
+        <Route path="/MarketWrap" element={<MarketWrap />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

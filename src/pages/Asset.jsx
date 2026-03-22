@@ -8,6 +8,7 @@ import { fetchAssetData, fetchMultiQuote } from '../components/marketData';
 import TechnicalChart from '../components/asset/TechnicalChart';
 import { useUserPrefs } from '@/lib/useUserPrefs';
 import RelatedArticles from '../components/asset/RelatedArticles';
+import AssetProfile from '../components/asset/AssetProfile';
 
 
 
@@ -199,6 +200,9 @@ export default function Asset() {
           )}
         </div>
       </div>
+
+      {/* AI Investment Profile */}
+      <AssetProfile symbol={symbol} />
 
       {/* Related Articles */}
       <RelatedArticles symbol={symbol} />

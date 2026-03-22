@@ -7,6 +7,7 @@ import TrendingTickers from '../components/dashboard/TrendingTickers';
 import LatestNews from '../components/dashboard/LatestNews';
 import AppPromo from '../components/dashboard/AppPromo';
 import Plus500Banner from '../components/dashboard/Plus500Banner';
+import MarketWrapWidget from '../components/dashboard/MarketWrapWidget';
 
 export default function Dashboard() {
   return (
@@ -47,6 +48,7 @@ export default function Dashboard() {
 
         {/* Right Column */}
         <div className="lg:col-span-4 space-y-5">
+          <MarketWrapWidget />
           <MarketSentiment />
           <Plus500Banner />
           <AppPromo />
