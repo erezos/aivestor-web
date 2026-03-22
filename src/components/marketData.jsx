@@ -87,14 +87,14 @@ export async function fetchEarningsForDates(dates) {
     // Try enriched first, then raw fallback
     const enriched = await base44.entities.CachedData.filter({ cache_key: `earnings_${date}` });
     if (enriched.length > 0 && enriched[0].data) {
-      const arr = JSON.parse(enriched[0].data).map(expandEarning);
+      const arr = JSON.parse(enriched[0].data).map(e => expandEarning(e, date));
       results.push(...arr);
       continue;
     }
     const raw = await base44.entities.CachedData.filter({ cache_key: `earnings_raw_${date}` });
     if (raw.length > 0 && raw[0].data) {
       const arr = JSON.parse(raw[0].data).map(e => ({
-        ...expandEarning(e),
+        ...expandEarning(e, date),
         volatilityForecast: 'Medium',
         volatilityReason:   'Analysis pending…',
         sentimentBias:      'neutral',
