@@ -29,14 +29,20 @@ Deno.serve(async (req) => {
     const json = res.ok ? await res.json() : null;
     const calendar = json?.earningsCalendar || [];
 
-    // Keep all analyst-covered companies (epsEstimate != null) — this gives NASDAQ/S&P coverage
-    const filtered = calendar
-      .filter(e => e.symbol && e.date && e.epsEstimate != null)
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const NOTABLE = new Set([
+      'AAPL','NVDA','MSFT','TSLA','META','AMZN','GOOGL','NFLX','AMD','INTC',
+      'JPM','GS','MS','BAC','WMT','COST','UBER','SNAP','PYPL','SQ','COIN',
+      'PLTR','V','MA','BABA','SHOP','CRM','ORCL','ADBE','QCOM','MU','ARM',
+      'DIS','SBUX','NKE','PFE','JNJ','UNH','CVX','XOM','T','VZ',
+      'IBM','CSCO','HON','CAT','BA','GE','F','GM','RIVN',
+    ]);
 
-    // Group by date
+    // Keep all analyst-covered companies (epsEstimate != null) — full NASDAQ/S&P coverage
+    const allEntries = calendar.filter(e => e.symbol && e.date && e.epsEstimate != null);
+
+    // Group by date, sort notable first, cap at 80 per day to stay under size limits
     const byDate = {};
-    for (const e of filtered) {
+    for (const e of allEntries) {
       if (!byDate[e.date]) byDate[e.date] = [];
       byDate[e.date].push({
         s:  e.symbol,
@@ -44,10 +50,17 @@ Deno.serve(async (req) => {
         t:  e.hour === 'bmo' ? 'BMO' : e.hour === 'amc' ? 'AMC' : 'DMH',
         ep: e.epsEstimate  ?? null,
         re: e.revenueEstimate ? `${(e.revenueEstimate / 1e9).toFixed(1)}B` : null,
+        n:  NOTABLE.has(e.symbol) ? 1 : 0,
       });
     }
 
     const dates = Object.keys(byDate).sort();
+
+    // Cap each day at 80 companies — notable first, then alphabetical
+    for (const date of dates) {
+      byDate[date].sort((a, b) => b.n - a.n || a.s.localeCompare(b.s));
+      byDate[date] = byDate[date].slice(0, 80);
+    }
 
     // Save raw data per-date (small chunks, no size limit issues)
     for (const date of dates) {
