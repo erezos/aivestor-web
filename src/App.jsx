@@ -13,7 +13,7 @@ import Watchlist from './pages/Watchlist.jsx';
 import Asset from './pages/Asset';
 import News from './pages/News';
 import Education from './pages/Education';
-import Earnings from './pages/Earnings';
+import Earnings from './pages/Earnings.jsx';
 import TestSuite from './pages/TestSuite';
 import MarketWrap from './pages/MarketWrap';
 
