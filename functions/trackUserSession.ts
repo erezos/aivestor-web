@@ -1,31 +1,33 @@
 /**
  * trackUserSession — Background analytics tracker.
+ * Tracks both authenticated users (by email) and anonymous users (by device_id).
  * Called fire-and-forget on every session start + session end.
- * Never blocks UI. Upserts a single record per user.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ ok: false });
 
     const body = await req.json();
     const { 
       device, geo, session_duration_seconds, 
       watchlist_size, watchlist_symbols,
-      pages_visited, referrer, utm_source, utm_medium, utm_campaign
+      pages_visited, referrer, utm_source, utm_medium, utm_campaign,
+      device_id, user_email
     } = body;
 
-    // Find existing record for this user
-    const existing = await base44.entities.UserAnalytics.filter({ user_email: user.email });
+    // Use email for authenticated users, device_id for anonymous
+    const trackingKey = user_email || device_id;
+    if (!trackingKey) return Response.json({ ok: false, reason: 'no tracking key' });
+
+    // Find existing record
+    const existing = await base44.asServiceRole.entities.UserAnalytics.filter({ user_email: trackingKey });
     const now = new Date().toISOString();
 
     if (existing.length === 0) {
-      // First ever session — create record
-      await base44.entities.UserAnalytics.create({
-        user_email: user.email,
+      await base44.asServiceRole.entities.UserAnalytics.create({
+        user_email: trackingKey,
         ...geo,
         ...device,
         session_count: 1,
@@ -43,9 +45,8 @@ Deno.serve(async (req) => {
       });
     } else {
       const rec = existing[0];
-      // Merge pages_visited — unique union
       const mergedPages = [...new Set([...(rec.pages_visited || []), ...(pages_visited || [])])];
-      await base44.entities.UserAnalytics.update(rec.id, {
+      await base44.asServiceRole.entities.UserAnalytics.update(rec.id, {
         ...geo,
         ...device,
         session_count: (rec.session_count || 0) + 1,
