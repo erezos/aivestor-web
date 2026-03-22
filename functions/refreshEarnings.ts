@@ -56,10 +56,10 @@ Deno.serve(async (req) => {
 
     const dates = Object.keys(byDate).sort();
 
-    // Cap each day at 80 companies — notable first, then alphabetical
+    // Cap each day at 40 companies — notable first, then alphabetical
     for (const date of dates) {
       byDate[date].sort((a, b) => b.n - a.n || a.s.localeCompare(b.s));
-      byDate[date] = byDate[date].slice(0, 80);
+      byDate[date] = byDate[date].slice(0, 40);
     }
 
     // Save raw data per-date (small chunks, no size limit issues)
