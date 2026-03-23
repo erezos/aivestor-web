@@ -36,12 +36,11 @@ async function getAlpacaBars(symbol, range) {
   if (!res.ok) return [];
   const json = await res.json();
   return (json.bars || []).map(b => ({
-    time:   Math.floor(new Date(b.t).getTime() / 1000),
-    open:   +b.o.toFixed(4),
-    high:   +b.h.toFixed(4),
-    low:    +b.l.toFixed(4),
-    close:  +b.c.toFixed(4),
-    volume: b.v || 0,
+    time:  Math.floor(new Date(b.t).getTime() / 1000),
+    open:  +b.o.toFixed(2),
+    high:  +b.h.toFixed(2),
+    low:   +b.l.toFixed(2),
+    close: +b.c.toFixed(2),
   }));
 }
 
