@@ -59,7 +59,6 @@ export default function Plus500Banner() {
         }}
       >
         <TrendingUp className="w-4 h-4" />
-        onClick={() => base44.analytics.track({ eventName: 'plus500_trade_now_clicked', properties: { source: 'dashboard_banner' } })}
         Trade Now
         <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${hovered ? 'translate-x-1' : ''}`} />
       </a>
