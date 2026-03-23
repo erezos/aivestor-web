@@ -49,6 +49,7 @@ export default function Plus500Banner() {
         rel="noopener noreferrer"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        onClick={() => base44.analytics.track({ eventName: 'plus500_trade_now_clicked', properties: { source: 'dashboard_banner' } })}
         className="relative flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-sm text-white transition-all duration-200 overflow-hidden"
         style={{
           background: hovered
