@@ -7,8 +7,8 @@ const FUTURES_URL = 'https://us.plus500.com/en/multisitelandingpage?id=138803&ta
 
 const CFD_PERKS = [
   { icon: Zap,        label: 'Instant Execution' },
-  { icon: TrendingUp, label: '2,800+ Instruments' },
-  { icon: Shield,     label: 'FCA Regulated' },
+  { icon: TrendingUp, label: 'CFDs on 2,800+ Instruments' },
+  { icon: Shield,     label: 'Regulated by CySEC (#250/14)' },
 ];
 
 const FUTURES_PERKS = [
