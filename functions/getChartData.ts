@@ -97,12 +97,15 @@ Deno.serve(async (req) => {
     if (!candles.length && entry) return Response.json(JSON.parse(entry.data));
     if (!candles.length) return Response.json([]);
 
-    // Persist to cache (non-blocking, non-fatal)
-    const payload = { cache_key: cacheKey, data: JSON.stringify(candles), refreshed_at: new Date().toISOString() };
-    try {
-      if (entry) base44.asServiceRole.entities.CachedData.update(entry.id, payload);
-      else       base44.asServiceRole.entities.CachedData.create(payload);
-    } catch (_) { /* cache write failed, ignore */ }
+    // Only cache medium ranges — 1d/5d have too many intraday bars, 1y is too large
+    const CACHEABLE = new Set(['1mo', '3mo']);
+    if (CACHEABLE.has(range)) {
+      const payload = { cache_key: cacheKey, data: JSON.stringify(candles), refreshed_at: new Date().toISOString() };
+      try {
+        if (entry) base44.asServiceRole.entities.CachedData.update(entry.id, payload);
+        else       base44.asServiceRole.entities.CachedData.create(payload);
+      } catch (_) { /* cache write failed, ignore */ }
+    }
 
     return Response.json(candles);
   } catch (err) {
