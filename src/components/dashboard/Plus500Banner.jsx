@@ -1,56 +1,73 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
+import { TrendingUp, Zap, Shield, ChevronRight } from 'lucide-react';
 
-const US_SRC = "https://cdn.plus500.com/Media/Banners/336x280/77918/index.html?set=Futures_BONUS_HTML&language=EN&country=US&crId=77918&url=https%3A%2F%2Fus.plus500.com%2Fen-us%2F%3Fid%3D138803%26pl%3D2%26crId%3D77918";
-const NON_US_SRC = "https://cdn.plus500.com/Media/Banners/336x280/98235/index.html?set=affiliates3 - Indonesia Local Banners - April 2025&language=EN&country=ID&crId=98235&url=https%3A%2F%2Fwww.plus500.com%2Fen--1%2Fmultiplatformdownload%3Fclt%3DWeb%26id%3D138803%26pl%3D2%26crId%3D98235";
+const AFFILIATE_URL = 'https://www.plus500.com/en/multiplatformdownload?clt=Web&id=138803&tags=first-link&pl=2';
 
-const BANNER_W = 336;
-const BANNER_H = 280;
+const PERKS = [
+  { icon: Zap,        label: 'Instant Execution' },
+  { icon: TrendingUp, label: '2,800+ Instruments' },
+  { icon: Shield,     label: 'Regulated Broker' },
+];
 
 export default function Plus500Banner() {
-  const [src, setSrc] = useState(null);
-  const [scale, setScale] = useState(1);
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    fetch('https://ipapi.co/json/')
-      .then(r => r.json())
-      .then(d => setSrc(d.country_code === 'US' ? US_SRC : NON_US_SRC))
-      .catch(() => setSrc(NON_US_SRC));
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const obs = new ResizeObserver(([entry]) => {
-      const w = entry.contentRect.width;
-      setScale(Math.min(1, w / BANNER_W));
-    });
-    obs.observe(containerRef.current);
-    return () => obs.disconnect();
-  }, []);
-
-  if (!src) return null;
-
-  const scaledH = BANNER_H * scale;
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <div className="glass rounded-2xl p-4 flex flex-col items-center gap-2">
+    <div className="glass rounded-2xl p-5 flex flex-col gap-4 border border-white/5 relative overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute inset-0 bg-gradient-to-br from-violet-600/8 via-transparent to-fuchsia-600/8 pointer-events-none" />
+
+      {/* Sponsor label */}
       <p className="text-[10px] text-white/20 uppercase tracking-widest font-semibold">Sponsored</p>
-      <div ref={containerRef} style={{ width: '100%', maxWidth: BANNER_W, height: scaledH, overflow: 'hidden', position: 'relative' }}>
-        <iframe
-          src={src}
-          width={BANNER_W}
-          height={BANNER_H}
-          scrolling="no"
-          frameBorder="0"
-          style={{
-            border: 'none',
-            transformOrigin: 'top left',
-            transform: `scale(${scale})`,
-            display: 'block',
-          }}
-          title="Plus500 Promotion"
-        />
+
+      {/* Logo + headline */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-lg">
+          <span className="text-[#1a1a2e] font-black text-sm tracking-tight">P500</span>
+        </div>
+        <div>
+          <div className="text-white font-black text-base leading-tight">Trade Stocks & Crypto</div>
+          <div className="text-white/40 text-xs mt-0.5">Join millions of traders on Plus500</div>
+        </div>
       </div>
+
+      {/* Perks */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {PERKS.map(({ icon: Icon, label }) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <Icon className="w-3 h-3 text-violet-400 flex-shrink-0" />
+            <span className="text-[11px] text-white/50">{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* CTA Button */}
+      <a
+        href={AFFILIATE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className="relative flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-sm text-white transition-all duration-200 overflow-hidden"
+        style={{
+          background: hovered
+            ? 'linear-gradient(135deg, #7c3aed, #a855f7, #ec4899)'
+            : 'linear-gradient(135deg, #6d28d9, #9333ea, #db2777)',
+          boxShadow: hovered ? '0 0 24px rgba(139,92,246,0.5)' : '0 0 12px rgba(139,92,246,0.25)',
+          transform: hovered ? 'scale(1.02)' : 'scale(1)',
+        }}
+      >
+        <TrendingUp className="w-4 h-4" />
+        Trade Now
+        <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${hovered ? 'translate-x-1' : ''}`} />
+      </a>
+
+      {/* Regulatory risk disclaimer — required by Plus500 affiliate rules */}
+      <p className="text-[9px] text-white/20 leading-relaxed">
+        CFDs are complex instruments and come with a high risk of losing money rapidly due to leverage.
+        82% of retail investor accounts lose money when trading CFDs with this provider.
+        You should consider whether you understand how CFDs work and whether you can afford to take the high risk of losing your money.
+      </p>
     </div>
   );
 }
