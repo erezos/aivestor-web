@@ -39,7 +39,7 @@ export default function Plus500Banner() {
 
   const disclaimer = isUS
     ? 'Futures trading involves significant risk of loss and is not suitable for all investors. Plus500US is registered with the CFTC and is a member of the NFA (NFA ID: 0001398). Past performance is not indicative of future results.'
-    : 'CFDs are complex instruments and come with a high risk of losing money rapidly due to leverage. 82% of retail investor accounts lose money when trading CFDs with this provider. Consider whether you can afford to take the high risk of losing your money.';
+    : 'CFDs are complex instruments and come with a high risk of losing money rapidly due to leverage. 80% of retail investor accounts lose money when trading CFDs with this provider. You should consider whether you can afford to take the high risk of losing your money.';
 
   return (
     <div className="glass rounded-2xl p-5 flex flex-col gap-4 border border-white/5 relative overflow-hidden">
