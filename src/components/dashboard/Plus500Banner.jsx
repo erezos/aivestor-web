@@ -33,7 +33,7 @@ export default function Plus500Banner() {
 
   const url      = isUS ? FUTURES_URL : CFD_URL;
   const perks    = isUS ? FUTURES_PERKS : CFD_PERKS;
-  const headline = isUS ? 'Trade Futures & Options' : 'Trade Stocks & Crypto';
+  const headline = isUS ? 'Trade Futures & Options' : 'Trade CFDs on Stocks & Crypto';
   const sub      = isUS ? 'US-regulated futures on 50+ markets' : 'Join millions of traders on Plus500';
   const tag      = isUS ? 'FUTURES' : 'CFDs';
 
