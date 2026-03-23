@@ -74,12 +74,17 @@ Deno.serve(async (req) => {
     const ttlMs    = (TTL_MIN[range] || 60) * 60000;
     const isCrypto = CRYPTO_SET.has(cleanSym);
 
+    // Only cache 1mo and 3mo — intraday and 1y exceed field size limits
+    const CACHEABLE = new Set(['1mo', '3mo']);
+
     // Try cache lookup — non-fatal if it fails
     let entry = null;
-    try {
-      const rows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey });
-      entry = rows[0] || null;
-    } catch (_) { /* cache unavailable, fetch fresh */ }
+    if (CACHEABLE.has(range)) {
+      try {
+        const rows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: cacheKey });
+        entry = rows[0] || null;
+      } catch (_) { /* cache unavailable, fetch fresh */ }
+    }
 
     const cacheAge = entry ? Date.now() - new Date(entry.refreshed_at).getTime() : Infinity;
 
