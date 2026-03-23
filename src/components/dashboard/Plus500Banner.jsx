@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TrendingUp, Zap, Shield, ChevronRight } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 
 const AFFILIATE_URL = 'https://www.plus500.com/en/multiplatformdownload?clt=Web&id=138803&tags=first-link&pl=2';
 
