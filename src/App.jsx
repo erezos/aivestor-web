@@ -55,6 +55,7 @@ const AuthenticatedApp = () => {
         <Route path="/TestSuite" element={<TestSuite />} />
         <Route path="/MarketWrap" element={<MarketWrap />} />
       </Route>
+      <Route path="/plus500" element={<Plus500Redirect />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
