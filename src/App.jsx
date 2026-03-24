@@ -16,6 +16,7 @@ import Education from './pages/Education';
 import Earnings from './pages/Earnings.jsx';
 import TestSuite from './pages/TestSuite';
 import MarketWrap from './pages/MarketWrap';
+import Plus500Redirect from './pages/Plus500Redirect';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
