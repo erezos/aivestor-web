@@ -77,7 +77,7 @@ export default function Plus500Banner() {
       <a
         href={url}
         target="_blank"
-        rel="noopener noreferrer"
+        rel=""
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onClick={() => base44.analytics.track({
