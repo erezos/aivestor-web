@@ -75,11 +75,20 @@ function expandEarning(e, date) {
     reportTime:         e.t,
     epsEstimate:        e.ep,
     revenueEstimate:    e.re,
+    epsActual:          e.ea ?? null,
+    revenueActual:      e.ra ?? null,
     isNotable:          e.n === 1,
     volatilityForecast: VF_EXPAND[e.vf] || e.vf || 'Medium',
     volatilityReason:   e.vr || 'Earnings report due',
     sentimentBias:      SB_EXPAND[e.sb] || e.sb || 'neutral',
   };
+}
+
+// Fetch EPS history for a symbol from cache
+export async function fetchEpsHistory(symbol) {
+  const rows = await base44.entities.CachedData.filter({ cache_key: `eps_history_${symbol}` });
+  if (rows.length > 0 && rows[0].data) return JSON.parse(rows[0].data);
+  return null;
 }
 
 // Fetch earnings for a specific date range (array of YYYY-MM-DD strings)
