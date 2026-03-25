@@ -4,6 +4,8 @@ import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Zap, TrendingUp, Tr
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { fetchEarningsForDates, fetchEarningsMeta, fetchEpsHistory } from '../components/marketData';
+import EarningsCard from '../components/earnings/EarningsCard';
+import CompanyLogo, { getGradient } from '../components/earnings/CompanyLogo';
 
 const VOL = {
   High:   { color: 'text-rose-400',    bg: 'bg-rose-500/15',    border: 'border-rose-500/30',    dot: 'bg-rose-400' },
@@ -37,7 +39,7 @@ function EpsBadge({ actual, estimate }) {
   const beat = actual >= estimate;
   const diff = ((actual - estimate) / Math.abs(estimate) * 100).toFixed(1);
   return (
-    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${beat ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${beat ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
       {beat ? `+${diff}%` : `${diff}%`}
     </span>
   );
@@ -180,34 +182,9 @@ export default function Earnings() {
                     <span className="text-[10px] text-white/10">—</span>
                   </div>
                 ) : (
-                  dayEarnings.map((e, i) => {
-                    const vCfg = VOL[e.volatilityForecast] || VOL.Medium;
-                    const hasActual = e.epsActual != null;
-                    return (
-                      <motion.button
-                        key={e.symbol}
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.03 }}
-                        onClick={() => setSelected(e)}
-                        className={`w-full text-left rounded-xl p-2 border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${hasActual ? 'bg-white/5 border-white/10' : `${vCfg.bg} ${vCfg.border}`} ${e.isNotable ? 'ring-1 ring-violet-500/20' : ''}`}
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <span className={`text-[11px] font-black ${e.isNotable ? 'text-white' : 'text-white/70'} truncate`}>{e.symbol}</span>
-                          {hasActual
-                            ? <EpsBadge actual={e.epsActual} estimate={e.epsEstimate} />
-                            : <span className={`text-[9px] font-bold ${vCfg.color} flex-shrink-0`}>{e.volatilityForecast === 'High' ? '🔥' : e.volatilityForecast === 'Medium' ? '⚡' : '✓'}</span>
-                          }
-                        </div>
-                        <div className="text-[9px] text-white/30 mt-0.5">{e.reportTime}</div>
-                        {hasActual ? (
-                          <div className="text-[9px] text-white/25 mt-0.5">EPS ${e.epsActual}</div>
-                        ) : e.epsEstimate != null ? (
-                          <div className="text-[9px] text-white/25 mt-0.5">Est ${e.epsEstimate.toFixed(2)}</div>
-                        ) : null}
-                      </motion.button>
-                    );
-                  })
+                  dayEarnings.map((e, i) => (
+                    <EarningsCard key={e.symbol} earning={e} index={i} onClick={setSelected} />
+                  ))
                 )}
               </div>
             );
@@ -239,8 +216,10 @@ export default function Earnings() {
 
               {/* Header */}
               <div className="flex items-center gap-3 mb-5">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-white/10 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-black text-violet-300">{selected.symbol.slice(0,2)}</span>
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getGradient(selected.symbol)} p-0.5 flex-shrink-0 shadow-xl`}>
+                  <div className="w-full h-full rounded-[14px] bg-[#0d0d14] flex items-center justify-center overflow-hidden">
+                    <CompanyLogo symbol={selected.symbol} size="lg" />
+                  </div>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
