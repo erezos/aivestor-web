@@ -123,12 +123,106 @@
       "name": "AIVestor",
       "url": "https://aivestor.online",
       "logo": "https://aivestor.online/logo.png",
+      "description": "AIVestor is a free AI-powered investment platform with real-time trading signals, earnings forecasts, market news, and portfolio tracking for stocks and crypto.",
       "sameAs": [
         "https://apps.apple.com/us/app/technical-analysis-ai/id6746874804",
         "https://play.google.com/store/apps/details?id=com.ioa.TipSync"
       ]
     }
     </script>
+
+    <!-- AEO: Structured Data — WebSite with SearchAction -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "AIVestor",
+      "url": "https://aivestor.online",
+      "description": "Free AI-powered investment platform — trading signals, earnings calendar, market news, and portfolio tracker for stocks and crypto.",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://aivestor.online/Asset?symbol={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
+    <!-- AEO: Structured Data — FinancialProduct (AI Signals) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Service",
+      "name": "AIVestor AI Trading Signals",
+      "url": "https://aivestor.online/HotBoard",
+      "provider": {
+        "@type": "Organization",
+        "name": "AIVestor"
+      },
+      "description": "AI-generated trading signals for stocks and cryptocurrencies. Signals include Strong Buy, Buy, Neutral, Caution, and Sell ratings with confidence scores and technical indicator breakdowns.",
+      "serviceType": "AI Investment Analysis",
+      "areaServed": "Worldwide",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "Free AI trading signals and market analysis"
+      }
+    }
+    </script>
+
+    <!-- AEO: Structured Data — ItemList (Key Features) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "name": "AIVestor Features",
+      "description": "Key features of the AIVestor AI investment platform",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "AI Trading Signals",
+          "description": "Real-time AI signals (Strong Buy to Sell) for thousands of stocks and crypto assets, powered by technical analysis and machine learning.",
+          "url": "https://aivestor.online/HotBoard"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Earnings Calendar",
+          "description": "Upcoming earnings reports with AI-generated volatility forecasts and EPS beat/miss history for public companies.",
+          "url": "https://aivestor.online/Earnings"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Daily Market Wrap",
+          "description": "AI-written daily market briefing covering equities, crypto, macro outlook, and a contrarian AI insight. Delivered by email every morning.",
+          "url": "https://aivestor.online/MarketWrap"
+        },
+        {
+          "@type": "ListItem",
+          "position": 4,
+          "name": "Market News with Sentiment",
+          "description": "Curated financial news with AI sentiment analysis (bullish/bearish/neutral) for stocks and crypto.",
+          "url": "https://aivestor.online/News"
+        },
+        {
+          "@type": "ListItem",
+          "position": 5,
+          "name": "Portfolio Tracker",
+          "description": "Track your stock and crypto portfolio with live P&L, cost basis, and performance metrics.",
+          "url": "https://aivestor.online/Dashboard"
+        }
+      ]
+    }
+    </script>
+
+    <!-- AI Crawler hints -->
+    <meta name="ai-content-type" content="financial-analysis-platform" />
+    <meta name="llms-txt" content="https://aivestor.online/llms.txt" />
     <!-- Google AdSense -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4097936941294193" crossorigin="anonymous"></script>
   </head>

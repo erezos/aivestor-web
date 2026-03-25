@@ -1,0 +1,69 @@
+# AIVestor — robots.txt
+# https://aivestor.online
+
+# ── Standard crawlers ──────────────────────────────────────────────────────────
+User-agent: *
+Allow: /
+Disallow: /TestSuite
+
+# ── AI / LLM crawlers — explicitly allowed ────────────────────────────────────
+
+# OpenAI (ChatGPT, GPT-4, Plugins, browsing)
+User-agent: GPTBot
+Allow: /
+
+# OpenAI ChatGPT user browsing
+User-agent: ChatGPT-User
+Allow: /
+
+# Anthropic (Claude)
+User-agent: ClaudeBot
+Allow: /
+
+# Anthropic Claude user browsing
+User-agent: Claude-User
+Allow: /
+
+# Perplexity AI
+User-agent: PerplexityBot
+Allow: /
+
+# Google AI (Gemini, AI Overviews, SGE)
+User-agent: Google-Extended
+Allow: /
+
+# Meta AI
+User-agent: FacebookBot
+Allow: /
+
+# Apple (Siri, Apple Intelligence)
+User-agent: Applebot
+Allow: /
+
+# Microsoft Bing / Copilot
+User-agent: Bingbot
+Allow: /
+
+User-agent: msnbot
+Allow: /
+
+# Amazon Alexa
+User-agent: ia_archiver
+Allow: /
+
+# Cohere AI
+User-agent: cohere-ai
+Allow: /
+
+# Common AI research crawlers
+User-agent: CCBot
+Allow: /
+
+User-agent: omgili
+Allow: /
+
+# ── Sitemaps ───────────────────────────────────────────────────────────────────
+Sitemap: https://aivestor.online/sitemap.xml
+
+# ── AI discovery files ────────────────────────────────────────────────────────
+# llms.txt: https://aivestor.online/llms.txt
