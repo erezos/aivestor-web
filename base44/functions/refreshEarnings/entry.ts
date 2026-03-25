@@ -99,17 +99,21 @@ Deno.serve(async (req) => {
 
       const dayEntries = allByDate[date];
 
+      // Filter: keep only companies with revenue estimate >= $1B, always keep NOTABLE
+      const MIN_REVENUE = 1_000_000_000;
+      const filtered = dayEntries.filter(e =>
+        NOTABLE.has(e.symbol) ||
+        (e.revenueEstimate != null && e.revenueEstimate >= MIN_REVENUE)
+      );
+
       // Sort: notable first, then by revenue size, then alpha
-      dayEntries.sort((a, b) => {
+      filtered.sort((a, b) => {
         const an = NOTABLE.has(a.symbol) ? 1 : 0;
         const bn = NOTABLE.has(b.symbol) ? 1 : 0;
         return bn - an || (b.revenueEstimate || 0) - (a.revenueEstimate || 0) || a.symbol.localeCompare(b.symbol);
       });
 
-      // Include ALL notable stocks regardless of cap, then fill up to 60 with others
-      const notableEntries = dayEntries.filter(e => NOTABLE.has(e.symbol));
-      const otherEntries   = dayEntries.filter(e => !NOTABLE.has(e.symbol));
-      const combined = [...notableEntries, ...otherEntries].slice(0, Math.max(notableEntries.length, 60));
+      const combined = filtered;
 
       const raw = combined.map(e => ({
         s:  e.symbol,
