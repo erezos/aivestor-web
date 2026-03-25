@@ -3,7 +3,7 @@
  * Called by the "Daily Market Wrap Generation" automation after generateMarketWrap runs,
  * OR triggered manually.
  */
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23'; // aivestor.online
 
 Deno.serve(async (req) => {
   try {
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
 
   <!-- CTA -->
   <div style="padding: 28px 32px; text-align: center;">
-    <a href="https://aivestor.app/MarketWrap" style="display: inline-block; padding: 12px 28px; background: linear-gradient(135deg, #6d28d9, #9333ea); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; border-radius: 12px;">Read Full Wrap → AIVestor</a>
+    <a href="https://aivestor.online/MarketWrap" style="display: inline-block; padding: 12px 28px; background: linear-gradient(135deg, #6d28d9, #9333ea); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; border-radius: 12px;">Read Full Wrap → AIVestor</a>
   </div>
 
   <!-- Footer -->
