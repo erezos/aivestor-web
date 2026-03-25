@@ -133,8 +133,13 @@ Deno.serve(async (req) => {
     const cacheKey = `asset_${cleanSym}`;
 
     // Parallel: cache lookup + live price fetch
+    // Note: Binance geo-blocks cloud servers — use Finnhub for crypto prices
     const pricePromise = isCrypto
-      ? fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${cleanSym}USDT`).then(r => r.json())
+      ? (async () => {
+          const r1 = await fhGet(`/quote?symbol=BINANCE:${cleanSym}USDT`);
+          if (r1?.c) return r1;
+          return fhGet(`/quote?symbol=COINBASE:${cleanSym}USD`);
+        })()
       : fhGet(`/quote?symbol=${cleanSym}`);
 
     const [rows, priceData] = await Promise.all([
@@ -144,8 +149,8 @@ Deno.serve(async (req) => {
 
     const cached    = rows[0];
     const cacheAge  = cached ? Date.now() - new Date(cached.refreshed_at).getTime() : Infinity;
-    const livePrice = isCrypto ? parseFloat(priceData?.lastPrice || 0) : (priceData?.c || 0);
-    const liveChange = isCrypto ? parseFloat(priceData?.priceChangePercent || 0) : (priceData?.dp || 0);
+    const livePrice = priceData?.c || 0;
+    const liveChange = priceData?.dp || 0;
 
     // Fresh cache → return immediately
     if (cached && cacheAge < CACHE_TTL_MS) {
