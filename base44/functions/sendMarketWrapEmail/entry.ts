@@ -12,10 +12,15 @@ Deno.serve(async (req) => {
     const today = new Date().toISOString().split('T')[0];
     const key = `market_wrap_${today}`;
 
-    // Load today's wrap
-    const wrapRows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: key });
+    // Load today's wrap — if missing, generate it on the fly
+    let wrapRows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: key });
     if (!wrapRows.length || !wrapRows[0].data) {
-      return Response.json({ error: "Today's market wrap not found. Run generateMarketWrap first." }, { status: 404 });
+      console.log("Wrap not found, generating on the fly...");
+      await base44.asServiceRole.functions.invoke('generateMarketWrap', {});
+      wrapRows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: key });
+    }
+    if (!wrapRows.length || !wrapRows[0].data) {
+      return Response.json({ error: "Failed to generate today's market wrap." }, { status: 500 });
     }
     const wrap = JSON.parse(wrapRows[0].data);
 
