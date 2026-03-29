@@ -25,7 +25,8 @@ const TOP_100 = [
 ];
 
 const CRYPTO_SET = new Set(['BTC','ETH','SOL','XRP','BNB','ADA','DOGE','AVAX','DOT','LINK']);
-const BATCH_SIZE = 10; // Process max 10 per run to stay well within timeout
+const BATCH_SIZE = 5;        // 5 LLM calls per run — safely within timeout and rate limits
+const LLM_DELAY_MS = 1500;  // 1.5s between LLM calls to avoid rate limiting
 
 Deno.serve(async (req) => {
   try {
@@ -33,13 +34,19 @@ Deno.serve(async (req) => {
     const now = new Date();
     const results = { refreshed: 0, skipped: 0, errors: 0 };
 
-    // Find stale assets first (avoids processing all 100 DB lookups sequentially)
+    // Fetch all cache entries in parallel (one Promise.all instead of 100 sequential calls)
+    const cacheEntries = await Promise.all(
+      TOP_100.map(symbol =>
+        base44.asServiceRole.entities.CachedData.filter({ cache_key: `asset_profile_${symbol}` })
+          .then(rows => ({ symbol, rows }))
+      )
+    );
+
+    // Determine which are stale
     const staleSymbols = [];
-    for (const symbol of TOP_100) {
-      const key = `asset_profile_${symbol}`;
-      const existing = await base44.asServiceRole.entities.CachedData.filter({ cache_key: key });
-      if (existing.length > 0 && existing[0].data) {
-        const cached = JSON.parse(existing[0].data);
+    for (const { symbol, rows } of cacheEntries) {
+      if (rows.length > 0 && rows[0].data) {
+        const cached = JSON.parse(rows[0].data);
         if (cached.next_refresh && new Date(cached.next_refresh) > now) {
           results.skipped++;
           continue;
@@ -48,13 +55,20 @@ Deno.serve(async (req) => {
       staleSymbols.push(symbol);
     }
 
+    // Build a lookup for existing rows to avoid re-fetching
+    const existingMap = {};
+    for (const { symbol, rows } of cacheEntries) {
+      if (rows.length > 0) existingMap[symbol] = rows[0];
+    }
+
     // Only process up to BATCH_SIZE stale assets this run
     const toProcess = staleSymbols.slice(0, BATCH_SIZE);
 
-    for (const symbol of toProcess) {
+    for (let i = 0; i < toProcess.length; i++) {
+      const symbol = toProcess[i];
       try {
-        const key = `asset_profile_${symbol}`;
-        const existing = await base44.asServiceRole.entities.CachedData.filter({ cache_key: key });
+        if (i > 0) await new Promise(r => setTimeout(r, LLM_DELAY_MS));
+
         const isCrypto = CRYPTO_SET.has(symbol);
         const assetType = isCrypto ? 'cryptocurrency' : 'stock';
 
@@ -75,10 +89,12 @@ Deno.serve(async (req) => {
 
         const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
         const profile = { symbol, ...result, generated_at: now.toISOString(), next_refresh: sevenDays };
+        const key = `asset_profile_${symbol}`;
         const payload = { cache_key: key, data: JSON.stringify(profile), refreshed_at: now.toISOString() };
 
-        if (existing.length > 0) {
-          await base44.asServiceRole.entities.CachedData.update(existing[0].id, payload);
+        const existing = existingMap[symbol];
+        if (existing) {
+          await base44.asServiceRole.entities.CachedData.update(existing.id, payload);
         } else {
           await base44.asServiceRole.entities.CachedData.create(payload);
         }
