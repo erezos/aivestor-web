@@ -1,0 +1,28 @@
+{
+  "name": "ProviderUsageLog",
+  "type": "object",
+  "properties": {
+    "provider": {
+      "type": "string",
+      "description": "e.g. finnhub, alpaca"
+    },
+    "endpoint": {
+      "type": "string"
+    },
+    "symbols_count": {
+      "type": "number",
+      "default": 1
+    },
+    "latency_ms": {
+      "type": "number"
+    },
+    "estimated_cost": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "provider",
+    "endpoint"
+  ]
+}

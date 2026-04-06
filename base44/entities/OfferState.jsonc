@@ -1,0 +1,37 @@
+{
+  "name": "OfferState",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Unique index \u2014 one row per user"
+    },
+    "free_tokens_used_total": {
+      "type": "number",
+      "default": 0
+    },
+    "purchase_count": {
+      "type": "number",
+      "default": 0
+    },
+    "starter_offer_seen_at": {
+      "type": "string"
+    },
+    "starter_offer_claimed_at": {
+      "type": "string"
+    },
+    "heavy_offer_seen_at": {
+      "type": "string"
+    },
+    "heavy_offer_claimed_at": {
+      "type": "string"
+    },
+    "config_version": {
+      "type": "string",
+      "default": "v1"
+    }
+  },
+  "required": [
+    "user_id"
+  ]
+}

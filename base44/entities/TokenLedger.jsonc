@@ -1,0 +1,66 @@
+{
+  "name": "TokenLedger",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Index"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Idempotency key, nullable"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "accrual",
+        "debit",
+        "credit",
+        "refund",
+        "reserve",
+        "commit",
+        "release"
+      ]
+    },
+    "amount": {
+      "type": "number",
+      "description": "Always positive int"
+    },
+    "bucket": {
+      "type": "string",
+      "enum": [
+        "free",
+        "paid",
+        "mixed"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "daily_free",
+        "ask_ai",
+        "purchase",
+        "system"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "completed",
+        "released"
+      ],
+      "default": "completed"
+    },
+    "note": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id",
+    "type",
+    "amount",
+    "bucket",
+    "source"
+  ]
+}

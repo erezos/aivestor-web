@@ -1,0 +1,30 @@
+{
+  "name": "Wallet",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Unique user ID (index)"
+    },
+    "free_balance": {
+      "type": "number",
+      "default": 0
+    },
+    "paid_balance": {
+      "type": "number",
+      "default": 0
+    },
+    "last_free_accrual_date": {
+      "type": "string",
+      "description": "YYYY-MM-DD UTC, nullable"
+    },
+    "version": {
+      "type": "number",
+      "default": 1,
+      "description": "Optimistic concurrency version"
+    }
+  },
+  "required": [
+    "user_id"
+  ]
+}

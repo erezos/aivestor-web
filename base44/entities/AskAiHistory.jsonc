@@ -1,0 +1,53 @@
+{
+  "name": "AskAiHistory",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Index"
+    },
+    "asset": {
+      "type": "string",
+      "description": "Index"
+    },
+    "question": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "quick",
+        "standard",
+        "deep"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "stance": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number"
+    },
+    "thesis_json": {
+      "type": "string",
+      "description": "JSON stringified array"
+    },
+    "risk_factors_json": {
+      "type": "string",
+      "description": "JSON stringified array"
+    },
+    "disclaimer": {
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Idempotency key, index"
+    }
+  },
+  "required": [
+    "user_id",
+    "asset"
+  ]
+}

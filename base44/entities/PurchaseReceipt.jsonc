@@ -1,0 +1,55 @@
+{
+  "name": "PurchaseReceipt",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Index"
+    },
+    "intent_id": {
+      "type": "string",
+      "description": "Unique index"
+    },
+    "transaction_id": {
+      "type": "string",
+      "description": "Platform transaction ID, unique index"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "apple",
+        "google"
+      ]
+    },
+    "product_id": {
+      "type": "string"
+    },
+    "raw_receipt_json": {
+      "type": "string",
+      "description": "JSON stringified receipt payload"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "completed",
+        "failed"
+      ],
+      "default": "pending"
+    },
+    "failure_reason": {
+      "type": "string"
+    },
+    "tokens_credited": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "user_id",
+    "intent_id",
+    "transaction_id",
+    "platform",
+    "product_id"
+  ]
+}
