@@ -47,7 +47,8 @@ async function ensureWallet(base44, userId) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user   = await base44.auth.me();
+    let user = null;
+    try { user = await base44.auth.me(); } catch (_) {}
     if (!user) return err('AUTH_REQUIRED', 'Authentication required', false, 401);
 
     const body = await req.json().catch(() => null);

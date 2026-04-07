@@ -81,11 +81,14 @@ Deno.serve(async (req) => {
       }
     } catch (_) { /* fallthrough to stale */ }
 
-    // Return stale on provider failure
+    // Return stale on provider failure — always prefer stale over hard error
     if (!candles.length && cached) {
       return ok({ ...JSON.parse(cached.data), stale: true }, { requestId: reqId, cache: { hit: true, ttlSec: 0 }, source: 'stale_cache', latencyMs: Date.now() - t0 });
     }
-    if (!candles.length) return err('PROVIDER_UNAVAILABLE', 'Chart data unavailable', true, 503);
+    if (!candles.length) {
+      // Last resort: return empty candles payload rather than 503 if symbol was valid
+      return ok({ symbol: sym, range, interval, candles: [] }, { requestId: reqId, cache: { hit: false, ttlSec: 0 }, source: 'provider_empty', latencyMs: Date.now() - t0 });
+    }
 
     // Sort ascending by time (guarantee)
     candles.sort((a, b) => a.t < b.t ? -1 : 1);

@@ -19,14 +19,24 @@ function err(code, message, retryable = false, status = 400) {
 }
 
 async function fhGet(path) {
-  const sep = path.includes('?') ? '&' : '?';
-  const res = await fetch(`https://finnhub.io/api/v1${path}${sep}token=${FINNHUB_KEY}`);
-  return res.ok ? res.json() : null;
+  try {
+    const sep = path.includes('?') ? '&' : '?';
+    const res = await fetch(`https://finnhub.io/api/v1${path}${sep}token=${FINNHUB_KEY}`);
+    if (!res.ok) return null;
+    const text = await res.text();
+    try { return JSON.parse(text); } catch (_) { return null; }
+  } catch (_) { return null; }
 }
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+
+    // Auth guard — auth.me() throws when unauthenticated on protected platforms; treat as no-user
+    let _user = null;
+    try { _user = await base44.auth.me(); } catch (_) {}
+    // getAssetOverview is a public endpoint — no auth required, but guard is here for future use
+
     const body = await req.json().catch(() => null);
     if (!body?.symbol) return err('INVALID_INPUT', 'symbol is required');
 

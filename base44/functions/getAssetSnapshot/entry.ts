@@ -46,9 +46,13 @@ const NEWS_TTL  = 300; // 5 min
 const OV_TTL    = 45;  // 45 sec
 
 async function fhGet(path) {
-  const sep = path.includes('?') ? '&' : '?';
-  const res = await fetch(`https://finnhub.io/api/v1${path}${sep}token=${FINNHUB_KEY}`);
-  return res.ok ? res.json() : null;
+  try {
+    const sep = path.includes('?') ? '&' : '?';
+    const res = await fetch(`https://finnhub.io/api/v1${path}${sep}token=${FINNHUB_KEY}`);
+    if (!res.ok) return null;
+    const text = await res.text();
+    try { return JSON.parse(text); } catch (_) { return null; }
+  } catch (_) { return null; }
 }
 
 async function getOverview(sym, isCrypto, base44) {
@@ -125,10 +129,13 @@ async function getChart(sym, isCrypto, range, base44) {
 
   if (!candles.length && cached) return { data: JSON.parse(cached.data), cacheHit: true, stale: true };
 
+  // Empty candles with no cache — return empty data set rather than failing the whole snapshot
   const data = { symbol: sym, range, interval: cfg.tf, candles };
-  const payload = { cache_key: cacheKey, data: JSON.stringify(data), refreshed_at: new Date().toISOString() };
-  if (cached) base44.asServiceRole.entities.CachedData.update(cached.id, payload).catch(() => {});
-  else        base44.asServiceRole.entities.CachedData.create(payload).catch(() => {});
+  if (candles.length > 0) {
+    const payload = { cache_key: cacheKey, data: JSON.stringify(data), refreshed_at: new Date().toISOString() };
+    if (cached) base44.asServiceRole.entities.CachedData.update(cached.id, payload).catch(() => {});
+    else        base44.asServiceRole.entities.CachedData.create(payload).catch(() => {});
+  }
 
   return { data, cacheHit: false };
 }
@@ -179,7 +186,8 @@ Deno.serve(async (req) => {
     if (!body?.symbol) return err('INVALID_INPUT', 'symbol is required');
 
     const sym    = body.symbol.replace(/-USD$/i, '').toUpperCase().trim();
-    const range  = (body.range || '1D').toUpperCase();
+    // Default to 1M (daily bars) — more reliable across providers than intraday
+    const range  = (body.range || '1M').toUpperCase();
     const newsLimit = Math.min(parseInt(body.newsLimit) || 10, 50);
 
     if (!VALID_COMBOS[range]) return err('INVALID_RANGE', `range must be one of: ${Object.keys(VALID_COMBOS).join(', ')}`);
