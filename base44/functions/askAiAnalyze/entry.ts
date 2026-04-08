@@ -171,6 +171,92 @@ async function fetchTechnicals(symbol, isCrypto) {
   } catch (_) { return null; }
 }
 
+// ── Fetch options sentiment from Finnhub ─────────────────────────────────────
+async function fetchOptionsSentiment(symbol, isCrypto) {
+  if (isCrypto) return null;
+  try {
+    const data = await fhGet(`/stock/option-chain?symbol=${symbol}`);
+    if (!data?.data?.length) return null;
+    let totalCallOI = 0, totalPutOI = 0, totalCallVol = 0, totalPutVol = 0;
+    for (const exp of data.data) {
+      for (const opt of (exp.options?.CALL || [])) {
+        totalCallOI  += opt.openInterest || 0;
+        totalCallVol += opt.volume || 0;
+      }
+      for (const opt of (exp.options?.PUT || [])) {
+        totalPutOI  += opt.openInterest || 0;
+        totalPutVol += opt.volume || 0;
+      }
+    }
+    const pcRatioOI  = totalCallOI  > 0 ? +(totalPutOI  / totalCallOI).toFixed(2)  : null;
+    const pcRatioVol = totalCallVol > 0 ? +(totalPutVol / totalCallVol).toFixed(2) : null;
+    const sentiment  = pcRatioVol == null ? null : pcRatioVol > 1.2 ? 'bearish_skew' : pcRatioVol < 0.7 ? 'bullish_skew' : 'neutral';
+    return { totalCallOI, totalPutOI, totalCallVol, totalPutVol, pcRatioOI, pcRatioVol, sentiment };
+  } catch (_) { return null; }
+}
+
+// ── Fetch short interest from Finnhub ────────────────────────────────────────
+async function fetchShortInterest(symbol, isCrypto) {
+  if (isCrypto) return null;
+  try {
+    const to   = new Date().toISOString().slice(0, 10);
+    const from = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    const data = await fhGet(`/stock/short-interest?symbol=${symbol}&from=${from}&to=${to}`);
+    if (!data?.data?.length) return null;
+    // Most recent entry
+    const latest = data.data[data.data.length - 1];
+    const prev   = data.data.length > 1 ? data.data[data.data.length - 2] : null;
+    const shortPct = latest.shortInterestPercentage ?? null;
+    const trend = prev && prev.shortInterestPercentage != null && shortPct != null
+      ? (shortPct > prev.shortInterestPercentage ? 'increasing' : shortPct < prev.shortInterestPercentage ? 'decreasing' : 'stable')
+      : null;
+    const squeeze = shortPct != null && shortPct > 20 ? true : false;
+    return { shortPct: shortPct ? +shortPct.toFixed(2) : null, date: latest.date, trend, highShortSqueezeRisk: squeeze };
+  } catch (_) { return null; }
+}
+
+// ── Fetch insider transactions from Finnhub ──────────────────────────────────
+async function fetchInsiderActivity(symbol, isCrypto) {
+  if (isCrypto) return null;
+  try {
+    const data = await fhGet(`/stock/insider-transactions?symbol=${symbol}`);
+    if (!data?.data?.length) return null;
+    // Last 90 days
+    const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    const recent = data.data.filter(t => t.transactionDate >= cutoff).slice(0, 20);
+    if (!recent.length) return null;
+    let buyShares = 0, sellShares = 0, buyCount = 0, sellCount = 0;
+    for (const t of recent) {
+      const shares = Math.abs(t.share || 0);
+      if (t.transactionCode === 'P') { buyShares += shares; buyCount++; }
+      else if (t.transactionCode === 'S') { sellShares += shares; sellCount++; }
+    }
+    const netBias = buyShares > sellShares * 1.5 ? 'insider_buying' : sellShares > buyShares * 1.5 ? 'insider_selling' : 'mixed';
+    return { buyCount, sellCount, buyShares, sellShares, netBias, periodDays: 90 };
+  } catch (_) { return null; }
+}
+
+// ── Fetch macro/sector context (SPY, QQQ, VIX) ───────────────────────────────
+async function fetchMacroContext() {
+  try {
+    const [spy, qqq, vix] = await Promise.all([
+      fhGet('/quote?symbol=SPY'),
+      fhGet('/quote?symbol=QQQ'),
+      fhGet('/quote?symbol=VIX'),
+    ]);
+    const vixLevel = vix?.c || null;
+    const vixRegime = vixLevel == null ? null : vixLevel > 30 ? 'high_fear' : vixLevel > 20 ? 'elevated' : 'calm';
+    return {
+      spy:  spy?.c  ? { price: spy.c,  changePct: spy.dp  || 0 } : null,
+      qqq:  qqq?.c  ? { price: qqq.c,  changePct: qqq.dp  || 0 } : null,
+      vix:  vixLevel ? { level: vixLevel, regime: vixRegime }     : null,
+      marketBias: spy?.dp != null
+        ? (spy.dp > 0.5 ? 'risk_on' : spy.dp < -0.5 ? 'risk_off' : 'neutral')
+        : null,
+    };
+  } catch (_) { return null; }
+}
+
 // ── Fetch analyst recommendations from Finnhub ────────────────────────────────
 async function fetchAnalystSentiment(symbol, isCrypto) {
   if (isCrypto) return null;
@@ -345,7 +431,11 @@ ANALYTICAL FRAMEWORK:
 2. Fundamental Analysis: Use P/E relative to sector norms. Earnings beats/misses create lasting price memory. Upcoming earnings are the single largest known volatility catalyst — always flag them.
 3. Analyst Consensus: Wall Street consensus shifts are leading indicators. A stock moving from HOLD to BUY consensus is a structural tailwind.
 4. Sentiment Integration: News sentiment and price action must be cross-validated. Bullish news in a downtrend = distribution. Bearish news in an uptrend = accumulation opportunity.
-5. Risk Management: Every thesis has an invalidation level. Specific price levels are more useful than qualitative descriptions.
+5. Options Flow: Put/Call ratio is a real-time sentiment gauge. A PC ratio >1.2 (volume) = institutions hedging downside. <0.7 = speculative call buying. Always cross-check with price action.
+6. Short Interest: High short float (>20%) = binary outcome risk — either short squeeze catalyst or sustained distribution. Rising short interest in a downtrend = strong bearish conviction.
+7. Insider Transactions: Corporate insiders have the best information advantage. Net insider buying in the last 90 days is one of the strongest contrarian bullish signals. Net selling is a yellow flag, not always bearish (diversification).
+8. Macro Context: VIX above 25 compresses risk asset multiples — even fundamentally strong stocks struggle. SPY/QQQ daily trend defines the market regime; trading against it requires a high-conviction catalyst.
+9. Risk Management: Every thesis has an invalidation level. Specific price levels are more useful than qualitative descriptions.
 
 REASONING APPROACH:
 - Start with the macro trend (SMA50 regime), then layer shorter-term signals (SMA20, MACD), then momentum (RSI, Stochastic), then catalysts (earnings, news, analyst changes).
@@ -445,7 +535,7 @@ Deno.serve(async (req) => {
     });
 
     // ── Fetch all market context in parallel ───────────────────────────────────
-    const [quote, metrics, newsRaw, technicals, analystSentiment, earningsCtx] = await Promise.all([
+    const [quote, metrics, newsRaw, technicals, analystSentiment, earningsCtx, optionsSentiment, shortInterest, insiderActivity, macroCtx] = await Promise.all([
       isCrypto
         ? fhGet(`/quote?symbol=BINANCE:${asset}USDT`).then(r => r?.c ? r : fhGet(`/quote?symbol=COINBASE:${asset}USD`))
         : fhGet(`/quote?symbol=${asset}`),
@@ -459,6 +549,10 @@ Deno.serve(async (req) => {
       fetchTechnicals(asset, isCrypto),
       fetchAnalystSentiment(asset, isCrypto),
       fetchEarningsContext(asset, isCrypto, base44),
+      fetchOptionsSentiment(asset, isCrypto),
+      fetchShortInterest(asset, isCrypto),
+      fetchInsiderActivity(asset, isCrypto),
+      fetchMacroContext(),
     ]);
 
     // ── Detect data desert (local/foreign asset with no provider coverage) ────
@@ -508,6 +602,35 @@ UPCOMING EARNINGS:
 ${earningsCtx.epsHistory?.length ? `- Last 4 quarters EPS history: ${earningsCtx.epsHistory.map(q => `${q.period}: est=${q.estimate} actual=${q.actual} (${q.beat})`).join(' | ')}` : '- EPS history: not available'}
 ` : `\nUPCOMING EARNINGS: No earnings report found in the next 8 weeks (or crypto asset).\n`;
 
+    const optionsSection = optionsSentiment ? `
+OPTIONS FLOW (Finnhub):
+- Total Call OI: ${optionsSentiment.totalCallOI.toLocaleString()} | Total Put OI: ${optionsSentiment.totalPutOI.toLocaleString()}
+- Call Volume: ${optionsSentiment.totalCallVol.toLocaleString()} | Put Volume: ${optionsSentiment.totalPutVol.toLocaleString()}
+- Put/Call Ratio (OI): ${optionsSentiment.pcRatioOI ?? 'N/A'} | Put/Call Ratio (Volume): ${optionsSentiment.pcRatioVol ?? 'N/A'}
+- Options Sentiment: ${optionsSentiment.sentiment ?? 'N/A'} (>1.2 = bearish skew, <0.7 = bullish skew)
+` : `\nOPTIONS FLOW: Not available (crypto or no options coverage).\n`;
+
+    const shortSection = shortInterest ? `
+SHORT INTEREST (Finnhub, as of ${shortInterest.date}):
+- Short % of Float: ${shortInterest.shortPct ?? 'N/A'}% | Trend: ${shortInterest.trend ?? 'N/A'}
+- Short Squeeze Risk: ${shortInterest.highShortSqueezeRisk ? 'ELEVATED (>20% short float)' : 'Normal'}
+` : `\nSHORT INTEREST: Not available.\n`;
+
+    const insiderSection = insiderActivity ? `
+INSIDER TRANSACTIONS (last 90 days, Finnhub):
+- Buy transactions: ${insiderActivity.buyCount} (${insiderActivity.buyShares.toLocaleString()} shares)
+- Sell transactions: ${insiderActivity.sellCount} (${insiderActivity.sellShares.toLocaleString()} shares)
+- Net insider bias: ${insiderActivity.netBias} (insider_buying = strongly bullish signal, insider_selling = caution)
+` : `\nINSIDER TRANSACTIONS: Not available.\n`;
+
+    const macroSection = macroCtx ? `
+MACRO / SECTOR CONTEXT:
+- SPY (S&P 500): $${macroCtx.spy?.price ?? 'N/A'} | Day Change: ${macroCtx.spy?.changePct ?? 'N/A'}%
+- QQQ (Nasdaq 100): $${macroCtx.qqq?.price ?? 'N/A'} | Day Change: ${macroCtx.qqq?.changePct ?? 'N/A'}%
+- VIX (Fear Index): ${macroCtx.vix?.level ?? 'N/A'} → ${macroCtx.vix?.regime ?? 'N/A'} (>30=high fear, 20-30=elevated, <20=calm)
+- Overall Market Bias: ${macroCtx.marketBias ?? 'N/A'} (risk_on = tailwind, risk_off = headwind for longs)
+` : `\nMACRO CONTEXT: Not available.\n`;
+
     const depthGuide = depth === 'deep'
       ? 'Provide deep, thorough CFA-level analysis. Each section must have 3-5 substantive bullets with specific price levels and catalysts.'
       : depth === 'standard'
@@ -522,9 +645,13 @@ ${earningsCtx.epsHistory?.length ? `- Last 4 quarters EPS history: ${earningsCtx
 ${dataDesertNote}
 LIVE MARKET DATA (from providers — may be null if asset is not US-listed):
 ${JSON.stringify(marketContext, null, 2)}
+${macroSection}
 ${techSection}
 ${analystSection}
 ${earningsSection}
+${optionsSection}
+${shortSection}
+${insiderSection}
 
 DEPTH REQUIREMENT: ${depthGuide}
 
@@ -532,6 +659,8 @@ CRITICAL OUTPUT RULES:
 - ${dataDesert ? 'DATA DESERT: Use web search / training knowledge. Cite sources where possible. Be transparent about data freshness.' : 'Only reference numeric data from the data above. Do NOT fabricate price levels.'}
 - RSI, MACD, and SMA data MUST be mentioned in technical_view section (mark as unavailable if no data).
 - Analyst consensus MUST be mentioned in sentiment_news_pulse section.
+- Options flow, short interest, and insider activity MUST be mentioned in sentiment_news_pulse if available.
+- Macro context (VIX regime, SPY/QQQ trend) MUST be mentioned in market_snapshot section.
 - If earnings are within 14 days, it MUST be flagged in risks_invalidations AND scenario_paths.
 - action_playbook must reference specific price levels (from technical data if available, or web-sourced levels).
 - stance: exactly bullish, bearish, or neutral.
