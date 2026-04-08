@@ -297,9 +297,30 @@ function buildSections(raw, asset) {
 }
 
 // ── AI call with one fallback retry ──────────────────────────────────────────
-async function invokeWithFallback(base44, systemPrompt, userPrompt, schema, depth) {
+// dataDesert = true when no provider had data → use Gemini with web search
+async function invokeWithFallback(base44, systemPrompt, userPrompt, schema, depth, dataDesert = false) {
   const primaryModel  = MODEL_PRIMARY[depth];
   const fallbackModel = MODEL_FALLBACK[depth];
+
+  // Data desert: no Finnhub + no Alpaca data → use Gemini web-grounded as primary
+  if (dataDesert) {
+    try {
+      const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
+        prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
+        model: 'gemini_3_flash',
+        add_context_from_internet: true,
+        response_json_schema: schema,
+      });
+      return { result, modelUsed: 'gemini_3_flash_web', fallbackUsed: false };
+    } catch (_) {}
+    // Fallback: standard model with whatever it knows from training
+    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
+      model: fallbackModel,
+      response_json_schema: schema,
+    });
+    return { result, modelUsed: fallbackModel, fallbackUsed: true };
+  }
 
   const callLLM = (model) => base44.asServiceRole.integrations.Core.InvokeLLM({
     prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
@@ -440,6 +461,10 @@ Deno.serve(async (req) => {
       fetchEarningsContext(asset, isCrypto, base44),
     ]);
 
+    // ── Detect data desert (local/foreign asset with no provider coverage) ────
+    const hasProviderData = !!(quote?.c || technicals);
+    const dataDesert = !hasProviderData;
+
     // ── Build context object for prompt ───────────────────────────────────────
     const marketContext = {
       symbol: asset,
@@ -489,9 +514,13 @@ ${earningsCtx.epsHistory?.length ? `- Last 4 quarters EPS history: ${earningsCtx
       ? 'Provide balanced analysis. Each section should have 2-3 well-reasoned bullet points.'
       : 'Provide a concise overview. Each section should have 1-2 key bullets with the most important signal.';
 
-    const userPrompt = `Analyze ${asset} for a ${timeframe} ${depth} trade.
+    const dataDesertNote = dataDesert
+      ? `\n⚠️ DATA DESERT MODE: Standard market data providers (Finnhub/Alpaca) returned no data for "${asset}". This is likely a local/regional stock (e.g. Tel Aviv Stock Exchange, Warsaw, Tokyo, etc.). You MUST use your web search capability and training knowledge to find: current price, recent performance, fundamentals (revenue, P/E, market cap), recent news, and analyst coverage. State the exchange and currency clearly. Be transparent about uncertainty — do NOT fabricate specific numbers you cannot verify.\n`
+      : '';
 
-LIVE MARKET DATA:
+    const userPrompt = `Analyze ${asset} for a ${timeframe} ${depth} trade.
+${dataDesertNote}
+LIVE MARKET DATA (from providers — may be null if asset is not US-listed):
 ${JSON.stringify(marketContext, null, 2)}
 ${techSection}
 ${analystSection}
@@ -500,13 +529,13 @@ ${earningsSection}
 DEPTH REQUIREMENT: ${depthGuide}
 
 CRITICAL OUTPUT RULES:
-- Only reference numeric data from the data above. Do NOT fabricate price levels.
-- RSI, MACD, and SMA data MUST be mentioned in technical_view section with interpretation.
+- ${dataDesert ? 'DATA DESERT: Use web search / training knowledge. Cite sources where possible. Be transparent about data freshness.' : 'Only reference numeric data from the data above. Do NOT fabricate price levels.'}
+- RSI, MACD, and SMA data MUST be mentioned in technical_view section (mark as unavailable if no data).
 - Analyst consensus MUST be mentioned in sentiment_news_pulse section.
-- If earnings are within 14 days, it MUST be flagged as a primary risk/catalyst in risks_invalidations AND scenario_paths.
-- action_playbook must reference specific price levels from the technical data (SMA20, SMA50, BB bands).
+- If earnings are within 14 days, it MUST be flagged in risks_invalidations AND scenario_paths.
+- action_playbook must reference specific price levels (from technical data if available, or web-sourced levels).
 - stance: exactly bullish, bearish, or neutral.
-- confidence: 0.0–1.0 (use the framework: 0.8+ = strong multi-signal alignment, 0.5–0.7 = mixed, <0.5 = contradictory).
+- confidence: 0.0–1.0 (use the framework: 0.8+ = strong multi-signal alignment, 0.5–0.7 = mixed, <0.5 = contradictory or data-limited).
 - All 7 content sections must have non-empty content and at least 1 bullet.`;
 
     const reportSchema = {
@@ -539,7 +568,7 @@ CRITICAL OUTPUT RULES:
     let inputTokens = 0, outputTokens = 0;
 
     try {
-      const { result, modelUsed: m, fallbackUsed: f } = await invokeWithFallback(base44, SYSTEM_PROMPT, userPrompt, reportSchema, depth);
+      const { result, modelUsed: m, fallbackUsed: f } = await invokeWithFallback(base44, SYSTEM_PROMPT, userPrompt, reportSchema, depth, dataDesert);
       aiRaw = result;
       modelUsed = m;
       fallbackUsed = f;
@@ -573,7 +602,7 @@ CRITICAL OUTPUT RULES:
       const report = {
         reportVersion: 'v2',
         generatedAt: new Date().toISOString(),
-        assetMeta: { symbol: asset, timeframe, locale, market: 'live' },
+        assetMeta: { symbol: asset, timeframe, locale, market: 'live', dataSource: dataDesert ? 'web_search' : 'providers' },
         sections,
         asset, summary,
         stance: normalizedStance,
