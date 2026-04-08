@@ -536,7 +536,10 @@ CRITICAL OUTPUT RULES:
 - action_playbook must reference specific price levels (from technical data if available, or web-sourced levels).
 - stance: exactly bullish, bearish, or neutral.
 - confidence: 0.0–1.0 (use the framework: 0.8+ = strong multi-signal alignment, 0.5–0.7 = mixed, <0.5 = contradictory or data-limited).
-- All 7 content sections must have non-empty content and at least 1 bullet.`;
+- All 7 content sections must have non-empty content and at least 1 bullet.
+${needsLocalization ? `- LOCALIZATION: You MUST also output a "localizedSummary" field — a concise 3-5 sentence summary of this entire report written in ${locale} (the user's language). The full report (all sections, bullets, thesis, riskFactors) must remain in English. Only localizedSummary is in ${locale}. Write it naturally, not as a translation — as if you were a local analyst speaking directly to the user.` : ''}`;
+
+    const needsLocalization = locale && locale !== 'en';
 
     const reportSchema = {
       type: 'object',
@@ -559,6 +562,9 @@ CRITICAL OUTPUT RULES:
             required: ['id', 'title', 'content', 'bullets'],
           },
         },
+        ...(needsLocalization ? {
+          localizedSummary: { type: 'string', description: `A concise 3-5 sentence summary of the entire report written in the locale language (${locale}). This is the only localized field — all other fields remain in English.` },
+        } : {}),
       },
       required: ['summary', 'stance', 'confidence', 'thesis', 'riskFactors', 'sections'],
     };
@@ -599,12 +605,17 @@ CRITICAL OUTPUT RULES:
       const riskFactors          = (aiRaw.riskFactors || []).map(sanitize);
       const summary              = sanitize(aiRaw.summary || '');
 
+      const localizedSummary = needsLocalization && aiRaw.localizedSummary
+        ? sanitize(aiRaw.localizedSummary)
+        : null;
+
       const report = {
         reportVersion: 'v2',
         generatedAt: new Date().toISOString(),
         assetMeta: { symbol: asset, timeframe, locale, market: 'live', dataSource: dataDesert ? 'web_search' : 'providers' },
         sections,
         asset, summary,
+        ...(localizedSummary ? { localizedSummary } : {}),
         stance: normalizedStance,
         confidence: normalizedConfidence,
         thesis,
