@@ -1,6 +1,12 @@
 /**
- * askAiAnalyze — v2 Single-Input Report Engine.
- * Produces a fixed 8-section premium report. Idempotent by requestId.
+ * askAiAnalyze — v2.1 Enhanced Report Engine.
+ * Improvements over v2:
+ *   - RSI, MACD, Bollinger Bands, SMA20/50, Stochastic, Volume trend (Alpaca)
+ *   - Earnings calendar context (next report date, EPS estimate, EPS beat history)
+ *   - Analyst consensus (Finnhub recommendation trends)
+ *   - CFA-style expert system prompt + 2 few-shot reasoning examples
+ *
+ * Fixed 8-section report. Idempotent by requestId.
  * Two-tier model routing: deep → claude_sonnet_4_6 (fallback: gpt_5)
  *                         standard/quick → gpt_5_mini (fallback: gpt_5_mini)
  * Token cost: quick=1, standard=2, deep=3
@@ -9,19 +15,17 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 const FINNHUB_KEY = Deno.env.get('FINNHUB_API_KEY');
+const ALPACA_KEY  = Deno.env.get('ALPACA_API_KEY');
+const ALPACA_SEC  = Deno.env.get('ALPACA_API_SECRET');
+const ALPACA_HDR  = { 'APCA-API-KEY-ID': ALPACA_KEY, 'APCA-API-SECRET-KEY': ALPACA_SEC };
 const CRYPTO_SET  = new Set(['BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','DOT','MATIC','LINK','BNB']);
 
-// Feature flag — set env var ASK_AI_SINGLE_INPUT_ENABLED=false to disable
 const FEATURE_ENABLED = Deno.env.get('ASK_AI_SINGLE_INPUT_ENABLED') !== 'false';
-
 const TOKEN_COST = { quick: 1, standard: 2, deep: 3 };
-
-// Model routing by depth
 const MODEL_PRIMARY  = { deep: 'claude_sonnet_4_6', standard: 'gpt_5_mini', quick: 'gpt_5_mini' };
 const MODEL_FALLBACK = { deep: 'gpt_5',             standard: 'gpt_5_mini', quick: 'gpt_5_mini' };
 
 const DISCLAIMER = 'This report is for informational purposes only and does not constitute investment advice. Past performance does not guarantee future results. Always do your own research.';
-
 const UNSAFE_WORDS = /\b(guaranteed|guarantee|risk-free|risk free|certain|certainty|will definitely|no risk|100% sure|cannot lose)\b/gi;
 
 // ── Envelope helpers ──────────────────────────────────────────────────────────
@@ -32,7 +36,7 @@ function err(code, message, retryable = false, status = 400) {
   return Response.json({ data: null, meta: { requestId: crypto.randomUUID(), asOf: new Date().toISOString(), cache: { hit: false, ttlSec: 0 }, source: 'system' }, error: { code, message, retryable } }, { status });
 }
 
-// ── Safe Finnhub fetch ────────────────────────────────────────────────────────
+// ── Safe fetch helpers ────────────────────────────────────────────────────────
 async function fhGet(path) {
   try {
     const sep = path.includes('?') ? '&' : '?';
@@ -40,6 +44,196 @@ async function fhGet(path) {
     if (!res.ok) return null;
     const text = await res.text();
     try { return JSON.parse(text); } catch (_) { return null; }
+  } catch (_) { return null; }
+}
+
+async function alpacaGet(url) {
+  try {
+    const res = await fetch(url, { headers: ALPACA_HDR });
+    if (!res.ok) return null;
+    const text = await res.text();
+    try { return JSON.parse(text); } catch (_) { return null; }
+  } catch (_) { return null; }
+}
+
+// ── Technical indicator calculations ─────────────────────────────────────────
+function calcRSI(closes, period = 14) {
+  if (closes.length < period + 2) return null;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d > 0) gains += d; else losses -= d;
+  }
+  let ag = gains / period, al = losses / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    ag = (ag * (period - 1) + Math.max(d, 0)) / period;
+    al = (al * (period - 1) + Math.max(-d, 0)) / period;
+  }
+  return al === 0 ? 100 : +(100 - 100 / (1 + ag / al)).toFixed(2);
+}
+
+function calcEMA(arr, period) {
+  const k = 2 / (period + 1);
+  let ema = arr.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < arr.length; i++) ema = arr[i] * k + ema * (1 - k);
+  return ema;
+}
+
+function calcMACD(closes) {
+  if (closes.length < 35) return null;
+  const buf = closes.slice(-55);
+  const macdLine = [];
+  for (let i = 25; i < buf.length; i++) {
+    const sl = buf.slice(0, i + 1);
+    macdLine.push(calcEMA(sl, 12) - calcEMA(sl, 26));
+  }
+  if (macdLine.length < 9) return null;
+  const sigVal  = calcEMA(macdLine, 9);
+  const macdVal = macdLine[macdLine.length - 1];
+  return { macd: +macdVal.toFixed(4), signal: +sigVal.toFixed(4), hist: +(macdVal - sigVal).toFixed(4) };
+}
+
+function calcBB(closes, period = 20) {
+  if (closes.length < period) return null;
+  const sl   = closes.slice(-period);
+  const mean = sl.reduce((a, b) => a + b, 0) / period;
+  const std  = Math.sqrt(sl.reduce((a, b) => a + (b - mean) ** 2, 0) / period);
+  return { upper: +(mean + 2 * std).toFixed(2), middle: +mean.toFixed(2), lower: +(mean - 2 * std).toFixed(2) };
+}
+
+function calcSMA(closes, period) {
+  if (closes.length < period) return null;
+  return +(closes.slice(-period).reduce((a, b) => a + b, 0) / period).toFixed(2);
+}
+
+function calcStoch(highs, lows, closes, k = 14) {
+  if (closes.length < k) return null;
+  const hs = highs.slice(-k), ls = lows.slice(-k);
+  const hh = Math.max(...hs), ll = Math.min(...ls);
+  if (hh === ll) return null;
+  return +((closes[closes.length - 1] - ll) / (hh - ll) * 100).toFixed(2);
+}
+
+// ── Fetch technicals from Alpaca ──────────────────────────────────────────────
+async function fetchTechnicals(symbol, isCrypto) {
+  try {
+    const start = new Date(Date.now() - 120 * 86400000).toISOString();
+    let bars = [];
+
+    if (isCrypto) {
+      const alpacaSym = `${symbol}/USD`;
+      const json = await alpacaGet(`https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=${encodeURIComponent(alpacaSym)}&timeframe=1Day&start=${start}&limit=200&sort=asc`);
+      bars = json?.bars?.[alpacaSym] || [];
+    } else {
+      const json = await alpacaGet(`https://data.alpaca.markets/v2/stocks/${encodeURIComponent(symbol)}/bars?timeframe=1Day&start=${start}&limit=200&sort=asc`);
+      bars = json?.bars || [];
+    }
+
+    if (bars.length < 20) return null;
+
+    const closes  = bars.map(b => b.c);
+    const highs   = bars.map(b => b.h);
+    const lows    = bars.map(b => b.l);
+    const volumes = bars.map(b => b.v);
+
+    const rsi  = calcRSI(closes);
+    const macd = calcMACD(closes);
+    const bb   = calcBB(closes);
+    const sma20 = calcSMA(closes, 20);
+    const sma50 = calcSMA(closes, 50);
+    const stoch = calcStoch(highs, lows, closes);
+    const currentPrice = closes[closes.length - 1];
+
+    // Volume trend: 5-day avg vs 20-day avg
+    const avg5  = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+    const avg20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const volumeTrend = avg20 > 0 ? +(avg5 / avg20).toFixed(2) : null;
+
+    // RSI interpretation
+    const rsiLabel = rsi == null ? null : rsi > 70 ? 'overbought' : rsi < 30 ? 'oversold' : 'neutral';
+    // MACD interpretation
+    const macdSignal = macd == null ? null : macd.hist > 0 ? 'bullish_crossover' : 'bearish_crossover';
+    // Price vs SMAs
+    const priceVsSMA20 = sma20 ? (currentPrice > sma20 ? 'above' : 'below') : null;
+    const priceVsSMA50 = sma50 ? (currentPrice > sma50 ? 'above' : 'below') : null;
+
+    return {
+      rsi, rsiLabel,
+      macd: macd?.macd, macdSignal: macd?.signal, macdHist: macd?.hist, macdInterpretation: macdSignal,
+      bbUpper: bb?.upper, bbMiddle: bb?.middle, bbLower: bb?.lower,
+      sma20, sma50,
+      stoch,
+      volumeTrend,
+      priceVsSMA20, priceVsSMA50,
+      currentPrice,
+    };
+  } catch (_) { return null; }
+}
+
+// ── Fetch analyst recommendations from Finnhub ────────────────────────────────
+async function fetchAnalystSentiment(symbol, isCrypto) {
+  if (isCrypto) return null;
+  try {
+    const data = await fhGet(`/stock/recommendation?symbol=${symbol}`);
+    if (!data?.length) return null;
+    const latest = data[0]; // most recent month
+    const { strongBuy = 0, buy = 0, hold = 0, sell = 0, strongSell = 0, period } = latest;
+    const total = strongBuy + buy + hold + sell + strongSell;
+    if (total === 0) return null;
+    const bullPct = Math.round((strongBuy + buy) / total * 100);
+    const bearPct = Math.round((sell + strongSell) / total * 100);
+    const consensus = bullPct >= 60 ? 'BUY' : bearPct >= 40 ? 'SELL' : 'HOLD';
+    return { period, strongBuy, buy, hold, sell, strongSell, total, bullPct, bearPct, consensus };
+  } catch (_) { return null; }
+}
+
+// ── Fetch upcoming earnings context ──────────────────────────────────────────
+async function fetchEarningsContext(symbol, isCrypto, base44) {
+  if (isCrypto) return null;
+  try {
+    // Look for the next earnings date in the next 8 weeks of cached data
+    const today = new Date();
+    for (let w = 0; w < 8; w++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + w * 7);
+      // Check each day of the week
+      for (let day = 0; day < 7; day++) {
+        const dateStr = new Date(d.getTime() + day * 86400000).toISOString().slice(0, 10);
+        if (dateStr < today.toISOString().slice(0, 10)) continue;
+        const rows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: `earnings_${dateStr}` });
+        if (!rows.length || !rows[0].data) continue;
+        const dayEntries = JSON.parse(rows[0].data);
+        const entry = dayEntries.find(e => e.s === symbol);
+        if (entry) {
+          // Also try to get EPS history
+          let epsHistory = null;
+          try {
+            const epsRows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: `eps_${symbol}` });
+            if (epsRows.length && epsRows[0].data) {
+              const history = JSON.parse(epsRows[0].data);
+              const recent = (history || []).slice(-4); // last 4 quarters
+              epsHistory = recent.map(q => ({
+                period: q.period,
+                estimate: q.estimate,
+                actual: q.actual,
+                beat: q.actual != null && q.estimate != null ? (q.actual > q.estimate ? 'beat' : q.actual < q.estimate ? 'miss' : 'met') : null,
+              }));
+            }
+          } catch (_) {}
+
+          return {
+            nextEarningsDate: dateStr,
+            timing: entry.t, // BMO / AMC / DMH
+            epsEstimate: entry.ep,
+            revenueEstimate: entry.re,
+            epsHistory,
+            daysUntilEarnings: Math.round((new Date(dateStr) - today) / 86400000),
+          };
+        }
+      }
+    }
+    return null;
   } catch (_) { return null; }
 }
 
@@ -103,28 +297,59 @@ function buildSections(raw, asset) {
 }
 
 // ── AI call with one fallback retry ──────────────────────────────────────────
-async function invokeWithFallback(base44, prompt, schema, depth) {
+async function invokeWithFallback(base44, systemPrompt, userPrompt, schema, depth) {
   const primaryModel  = MODEL_PRIMARY[depth];
   const fallbackModel = MODEL_FALLBACK[depth];
 
-  const callLLM = async (model) => {
-    return base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt,
-      model,
-      response_json_schema: schema,
-    });
-  };
+  const callLLM = (model) => base44.asServiceRole.integrations.Core.InvokeLLM({
+    prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
+    model,
+    response_json_schema: schema,
+  });
 
-  // Primary attempt
   try {
     const result = await callLLM(primaryModel);
     return { result, modelUsed: primaryModel, fallbackUsed: false };
   } catch (_) {}
 
-  // Fallback attempt
   const result = await callLLM(fallbackModel);
   return { result, modelUsed: fallbackModel, fallbackUsed: true };
 }
+
+// ── CFA-style system prompt ───────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are a senior financial analyst with CFA designation and 20 years of experience across equity research, technical analysis, and macro strategy. You reason like a professional:
+
+ANALYTICAL FRAMEWORK:
+1. Technical Analysis: Always interpret RSI, MACD, Bollinger Bands, and SMAs together — never in isolation. A single oversold RSI is not a buy signal without momentum confirmation from MACD. Price location relative to SMA20/SMA50 defines the trend regime.
+2. Fundamental Analysis: Use P/E relative to sector norms. Earnings beats/misses create lasting price memory. Upcoming earnings are the single largest known volatility catalyst — always flag them.
+3. Analyst Consensus: Wall Street consensus shifts are leading indicators. A stock moving from HOLD to BUY consensus is a structural tailwind.
+4. Sentiment Integration: News sentiment and price action must be cross-validated. Bullish news in a downtrend = distribution. Bearish news in an uptrend = accumulation opportunity.
+5. Risk Management: Every thesis has an invalidation level. Specific price levels are more useful than qualitative descriptions.
+
+REASONING APPROACH:
+- Start with the macro trend (SMA50 regime), then layer shorter-term signals (SMA20, MACD), then momentum (RSI, Stochastic), then catalysts (earnings, news, analyst changes).
+- For swing trades: focus on MACD crossover timing, RSI momentum, and next earnings date as a hard deadline.
+- For scalps: focus on Bollinger Band position, volume trend, and intraday momentum.
+- For long-term: focus on fundamental value (P/E, analyst consensus), earnings trajectory, and macro regime.
+
+PROFESSIONAL STANDARDS:
+- Cite specific price levels (support/resistance from SMA20/50, BB bands).
+- State the primary catalyst and its probability clearly.
+- Acknowledge conflicting signals — do not paper over them.
+- Never use phrases like "guaranteed", "risk-free", or "certain".
+- Confidence score reflects the convergence of signals: 0.8+ = strong multi-signal alignment, 0.5-0.7 = mixed signals, <0.5 = unclear/contradictory.
+
+FEW-SHOT EXAMPLES OF PROFESSIONAL REASONING:
+
+EXAMPLE 1 — BULLISH SETUP (NVDA-like):
+Context: RSI=62 (momentum, not overbought), MACD hist=+0.45 (bullish crossover), price above SMA20 ($820) and SMA50 ($790), BB middle=$815, analyst consensus=BUY (78% bulls), earnings in 18 days with 4 consecutive beats.
+Reasoning: "NVDA is in a confirmed uptrend (price above both SMAs). MACD histogram expansion confirms bullish momentum. RSI at 62 has room to run before overbought territory. The 78% buy consensus provides a structural tailwind. The upcoming earnings in 18 days represent a binary event — 4 consecutive EPS beats argue for a positive surprise probability above base rate. Key support at SMA20 $820. Bull case invalidated below SMA50 $790."
+Stance: bullish. Confidence: 0.76.
+
+EXAMPLE 2 — BEARISH/NEUTRAL SETUP (META-like correction):
+Context: RSI=38 (approaching oversold but not there), MACD hist=-0.82 (bearish, widening), price below SMA20 ($485) but above SMA50 ($460), BB lower=$472, analyst consensus=HOLD (44% bulls), earnings in 3 days, last quarter missed revenue by 2%.
+Reasoning: "META is in a short-term downtrend (below SMA20) but long-term uptrend (above SMA50). The widening MACD histogram indicates accelerating selling pressure. RSI approaching oversold but not yet at reversal territory. With earnings in 3 days after a recent revenue miss, downside risk is elevated. Holding SMA50 at $460 is critical — a breach would shift this from short-term correction to trend reversal. The HOLD consensus offers no institutional buying support. Tactically bearish, structurally neutral."
+Stance: bearish. Confidence: 0.63.`;
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
@@ -136,7 +361,6 @@ Deno.serve(async (req) => {
     try { user = await base44.auth.me(); } catch (_) {}
     if (!user) return err('AUTH_REQUIRED', 'Authentication required', false, 401);
 
-    // Feature flag check
     if (!FEATURE_ENABLED) {
       return err('ASK_AI_SINGLE_INPUT_DISABLED', 'Ask AI single-input engine is currently disabled.', false, 503);
     }
@@ -154,7 +378,7 @@ Deno.serve(async (req) => {
     const userId    = user.id;
     const isCrypto  = CRYPTO_SET.has(asset);
 
-    // ── Idempotency: return existing completed result ─────────────────────────
+    // ── Idempotency ────────────────────────────────────────────────────────────
     const existing = await base44.asServiceRole.entities.AskAiHistory.filter({ request_id: reqId });
     if (existing.length > 0) {
       const h = existing[0];
@@ -178,12 +402,12 @@ Deno.serve(async (req) => {
       }, reqId);
     }
 
-    // ── Balance check ─────────────────────────────────────────────────────────
-    const wallet    = await ensureWallet(base44, userId);
-    const total     = (wallet.free_balance || 0) + (wallet.paid_balance || 0);
+    // ── Balance check ──────────────────────────────────────────────────────────
+    const wallet = await ensureWallet(base44, userId);
+    const total  = (wallet.free_balance || 0) + (wallet.paid_balance || 0);
     if (total < cost) return err('INSUFFICIENT_TOKENS', `This analysis costs ${cost} token(s). You have ${total}.`, false, 402);
 
-    // ── Reserve tokens ────────────────────────────────────────────────────────
+    // ── Reserve tokens ─────────────────────────────────────────────────────────
     const freeDebit = Math.min(wallet.free_balance || 0, cost);
     const paidDebit = cost - freeDebit;
     const bucket    = freeDebit > 0 && paidDebit > 0 ? 'mixed' : freeDebit > 0 ? 'free' : 'paid';
@@ -199,20 +423,24 @@ Deno.serve(async (req) => {
       bucket, source: 'ask_ai', status: 'pending', note: `${depth} analysis for ${asset}`,
     });
 
-    // ── Fetch market context ──────────────────────────────────────────────────
-    const [quote, metrics, newsRaw] = await Promise.all([
+    // ── Fetch all market context in parallel ───────────────────────────────────
+    const [quote, metrics, newsRaw, technicals, analystSentiment, earningsCtx] = await Promise.all([
       isCrypto
         ? fhGet(`/quote?symbol=BINANCE:${asset}USDT`).then(r => r?.c ? r : fhGet(`/quote?symbol=COINBASE:${asset}USD`))
         : fhGet(`/quote?symbol=${asset}`),
       isCrypto ? null : fhGet(`/stock/basic-financials?symbol=${asset}&metric=all`),
-      isCrypto ? null : (async () => {
+      (async () => {
         const to = new Date().toISOString().slice(0, 10);
-        const from = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
+        const from = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
         const articles = await fhGet(`/company-news?symbol=${asset}&from=${from}&to=${to}`);
-        return (articles || []).slice(0, 5).map(a => a.headline?.slice(0, 100)).filter(Boolean);
+        return (articles || []).slice(0, 8).map(a => a.headline?.slice(0, 120)).filter(Boolean);
       })(),
+      fetchTechnicals(asset, isCrypto),
+      fetchAnalystSentiment(asset, isCrypto),
+      fetchEarningsContext(asset, isCrypto, base44),
     ]);
 
+    // ── Build context object for prompt ───────────────────────────────────────
     const marketContext = {
       symbol: asset,
       assetType: isCrypto ? 'crypto' : 'equity',
@@ -229,33 +457,57 @@ Deno.serve(async (req) => {
       recentHeadlines: newsRaw || [],
     };
 
-    // ── Build AI prompt ───────────────────────────────────────────────────────
+    // ── Build prompt sections ─────────────────────────────────────────────────
+    const techSection = technicals ? `
+TECHNICAL INDICATORS (calculated from last 120 days of daily OHLCV — Alpaca):
+- RSI(14): ${technicals.rsi ?? 'N/A'} → ${technicals.rsiLabel ?? 'N/A'}
+- MACD: ${technicals.macd ?? 'N/A'} | Signal: ${technicals.macdSignal ?? 'N/A'} | Histogram: ${technicals.macdHist ?? 'N/A'} → ${technicals.macdInterpretation ?? 'N/A'}
+- Bollinger Bands(20,2): Upper=${technicals.bbUpper ?? 'N/A'} | Middle=${technicals.bbMiddle ?? 'N/A'} | Lower=${technicals.bbLower ?? 'N/A'}
+- SMA20: ${technicals.sma20 ?? 'N/A'} (price is ${technicals.priceVsSMA20 ?? 'N/A'} SMA20)
+- SMA50: ${technicals.sma50 ?? 'N/A'} (price is ${technicals.priceVsSMA50 ?? 'N/A'} SMA50)
+- Stochastic %K(14): ${technicals.stoch ?? 'N/A'}
+- Volume Trend (5d/20d avg): ${technicals.volumeTrend ?? 'N/A'}x (${technicals.volumeTrend > 1.2 ? 'above average — increasing interest' : technicals.volumeTrend < 0.8 ? 'below average — waning interest' : 'in line with average'})
+` : `\nTECHNICAL INDICATORS: Not available for this asset.\n`;
+
+    const analystSection = analystSentiment ? `
+ANALYST CONSENSUS (Finnhub, most recent month: ${analystSentiment.period}):
+- Strong Buy: ${analystSentiment.strongBuy} | Buy: ${analystSentiment.buy} | Hold: ${analystSentiment.hold} | Sell: ${analystSentiment.sell} | Strong Sell: ${analystSentiment.strongSell}
+- Total analysts: ${analystSentiment.total} | Bull%: ${analystSentiment.bullPct}% | Bear%: ${analystSentiment.bearPct}%
+- Wall Street Consensus: ${analystSentiment.consensus}
+` : `\nANALYST CONSENSUS: Not available (crypto or no coverage).\n`;
+
+    const earningsSection = earningsCtx ? `
+UPCOMING EARNINGS:
+- Next report date: ${earningsCtx.nextEarningsDate} (${earningsCtx.daysUntilEarnings} days away, ${earningsCtx.timing})
+- EPS Estimate: ${earningsCtx.epsEstimate ?? 'N/A'} | Revenue Estimate: ${earningsCtx.revenueEstimate ?? 'N/A'}
+${earningsCtx.epsHistory?.length ? `- Last 4 quarters EPS history: ${earningsCtx.epsHistory.map(q => `${q.period}: est=${q.estimate} actual=${q.actual} (${q.beat})`).join(' | ')}` : '- EPS history: not available'}
+` : `\nUPCOMING EARNINGS: No earnings report found in the next 8 weeks (or crypto asset).\n`;
+
     const depthGuide = depth === 'deep'
-      ? 'Provide deep, thorough analysis. Each section must have 3-5 substantive bullet points. Be specific about price levels, catalysts, and scenarios.'
+      ? 'Provide deep, thorough CFA-level analysis. Each section must have 3-5 substantive bullets with specific price levels and catalysts.'
       : depth === 'standard'
-      ? 'Provide balanced analysis. Each section should have 2-3 bullet points.'
-      : 'Provide a concise overview. Each section should have 1-2 key bullet points.';
+      ? 'Provide balanced analysis. Each section should have 2-3 well-reasoned bullet points.'
+      : 'Provide a concise overview. Each section should have 1-2 key bullets with the most important signal.';
 
-    const prompt = `You are an expert financial analyst producing a structured investment report for ${asset}.
+    const userPrompt = `Analyze ${asset} for a ${timeframe} ${depth} trade.
 
-LIVE MARKET DATA (use only this data, do not fabricate numbers):
+LIVE MARKET DATA:
 ${JSON.stringify(marketContext, null, 2)}
+${techSection}
+${analystSection}
+${earningsSection}
 
-TIMEFRAME FOCUS: ${timeframe} (swing = days to weeks, scalp = hours to days, longterm = months to years)
+DEPTH REQUIREMENT: ${depthGuide}
 
-${depthGuide}
-
-CRITICAL RULES:
-- Only reference numeric data from the live market context above.
-- Do NOT use words like "guaranteed", "risk-free", "certain", "will definitely".
-- Clamp confidence between 0.0 and 1.0.
-- stance must be exactly: bullish, bearish, or neutral.
-- All 7 content sections must have non-empty content and at least 1 bullet.
-- sentiment_news_pulse must reference the provided headlines if any exist.
-- scenario_paths must describe at least a bull case and bear case.
-- action_playbook must be concrete (entry conditions, levels to watch).
-
-Produce a structured JSON report.`;
+CRITICAL OUTPUT RULES:
+- Only reference numeric data from the data above. Do NOT fabricate price levels.
+- RSI, MACD, and SMA data MUST be mentioned in technical_view section with interpretation.
+- Analyst consensus MUST be mentioned in sentiment_news_pulse section.
+- If earnings are within 14 days, it MUST be flagged as a primary risk/catalyst in risks_invalidations AND scenario_paths.
+- action_playbook must reference specific price levels from the technical data (SMA20, SMA50, BB bands).
+- stance: exactly bullish, bearish, or neutral.
+- confidence: 0.0–1.0 (use the framework: 0.8+ = strong multi-signal alignment, 0.5–0.7 = mixed, <0.5 = contradictory).
+- All 7 content sections must have non-empty content and at least 1 bullet.`;
 
     const reportSchema = {
       type: 'object',
@@ -282,26 +534,24 @@ Produce a structured JSON report.`;
       required: ['summary', 'stance', 'confidence', 'thesis', 'riskFactors', 'sections'],
     };
 
-    // ── Call AI with fallback ─────────────────────────────────────────────────
+    // ── Call AI with fallback ──────────────────────────────────────────────────
     let aiRaw = null, modelUsed = null, fallbackUsed = false, aiError = null;
     let inputTokens = 0, outputTokens = 0;
 
     try {
-      const { result, modelUsed: m, fallbackUsed: f } = await invokeWithFallback(base44, prompt, reportSchema, depth);
+      const { result, modelUsed: m, fallbackUsed: f } = await invokeWithFallback(base44, SYSTEM_PROMPT, userPrompt, reportSchema, depth);
       aiRaw = result;
       modelUsed = m;
       fallbackUsed = f;
-      // Estimate token usage from prompt/output size (no exact API)
-      inputTokens  = Math.ceil(prompt.length / 4);
+      inputTokens  = Math.ceil((SYSTEM_PROMPT.length + userPrompt.length) / 4);
       outputTokens = Math.ceil(JSON.stringify(aiRaw).length / 4);
     } catch (e) {
       aiError = e.message;
     }
 
-    // ── Timeout detection (function budget ~25s; flag if AI took too long) ────
     const latencyMs = Date.now() - t0;
+
     if (!aiRaw && aiError?.includes('timeout')) {
-      // Refund
       const cw = await getWallet(base44, userId);
       await base44.asServiceRole.entities.Wallet.update(cw.id, {
         free_balance: (cw.free_balance || 0) + freeDebit,
@@ -312,9 +562,7 @@ Produce a structured JSON report.`;
       return err('ASK_AI_TIMEOUT', 'Analysis timed out. Tokens have been refunded.', true, 503);
     }
 
-    // ── Commit or release ─────────────────────────────────────────────────────
     if (aiRaw) {
-      // Normalize + guardrails
       const normalizedStance     = normalizeStance(aiRaw.stance);
       const normalizedConfidence = clampConfidence(aiRaw.confidence);
       const sections             = buildSections(aiRaw, asset);
@@ -335,10 +583,8 @@ Produce a structured JSON report.`;
         disclaimer: DISCLAIMER,
       };
 
-      // Commit ledger
       await base44.asServiceRole.entities.TokenLedger.update(reserveEntry.id, { status: 'completed', type: 'commit' });
 
-      // Persist history with full report artifact
       await base44.asServiceRole.entities.AskAiHistory.create({
         user_id: userId, request_id: reqId, asset,
         mode: depth, depth, timeframe,
@@ -354,7 +600,6 @@ Produce a structured JSON report.`;
         output_tokens: outputTokens,
       });
 
-      // Update offer state
       const offerRows = await base44.asServiceRole.entities.OfferState.filter({ user_id: userId });
       if (offerRows.length > 0) {
         await base44.asServiceRole.entities.OfferState.update(offerRows[0].id, {
@@ -365,12 +610,12 @@ Produce a structured JSON report.`;
       }
 
       const updatedWallet = await getWallet(base44, userId);
-      const costEstimateUsd = depth === 'deep' ? (inputTokens * 0.000003 + outputTokens * 0.000015) : (inputTokens + outputTokens) * 0.0000006;
+      const costEstimateUsd = depth === 'deep'
+        ? (inputTokens * 0.000003 + outputTokens * 0.000015)
+        : (inputTokens + outputTokens) * 0.0000006;
 
       return ok({
-        requestId: reqId,
-        status: 'completed',
-        report,
+        requestId: reqId, status: 'completed', report,
         wallet: {
           userId,
           balanceFree: updatedWallet?.free_balance || 0,
@@ -382,7 +627,6 @@ Produce a structured JSON report.`;
       }, reqId);
 
     } else {
-      // Release: refund tokens
       const cw = await getWallet(base44, userId);
       await base44.asServiceRole.entities.Wallet.update(cw.id, {
         free_balance: (cw.free_balance || 0) + freeDebit,
