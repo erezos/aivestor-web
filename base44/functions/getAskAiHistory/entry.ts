@@ -1,11 +1,34 @@
 /**
- * getAskAiHistory — Phase 4. Paginated AI analysis history for authenticated user.
+ * getAskAiHistory — v2. Paginated AI analysis history for authenticated user.
+ * Returns full v2 report shape including sections for Flutter to reopen reports.
  * 60-day retention enforced by nightly cleanup automation.
  * Cursor = offset index (opaque string).
  *
  * Request: { limit?, cursor?, requestId? }
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+
+const DISCLAIMER = 'This report is for informational purposes only and does not constitute investment advice. Past performance does not guarantee future results. Always do your own research.';
+
+const SECTION_DEFS = [
+  { id: 'market_snapshot',      title: 'Market Snapshot'        },
+  { id: 'ai_conclusion',        title: 'AI Conclusion'          },
+  { id: 'technical_view',       title: 'Technical View'         },
+  { id: 'sentiment_news_pulse', title: 'Sentiment & News Pulse' },
+  { id: 'scenario_paths',       title: 'Scenario Paths'         },
+  { id: 'risks_invalidations',  title: 'Risks & Invalidations'  },
+  { id: 'action_playbook',      title: 'Action Playbook'        },
+  { id: 'disclaimer',           title: 'Disclaimer'             },
+];
+
+function buildFallbackSections(asset) {
+  return SECTION_DEFS.map(def => ({
+    id: def.id,
+    title: def.title,
+    content: def.id === 'disclaimer' ? DISCLAIMER : `See summary for ${asset}.`,
+    bullets: [],
+  }));
+}
 
 function ok(data, reqId) {
   return Response.json({ data, meta: { requestId: reqId || crypto.randomUUID(), asOf: new Date().toISOString(), cache: { hit: false, ttlSec: 0 }, source: 'db' }, error: null });
@@ -32,20 +55,48 @@ Deno.serve(async (req) => {
     const page       = all.slice(cursor, cursor + limit);
     const nextCursor = cursor + limit < all.length ? String(cursor + limit) : null;
 
-    const items = page.map(h => ({
-      id: h.id,
-      asset: h.asset,
-      question: h.question,
-      mode: h.mode,
-      summary: h.summary,
-      stance: h.stance,
-      confidence: h.confidence,
-      requestId: h.request_id,
-      createdAt: h.created_date,
-    }));
+    const items = page.map(h => {
+      // Hydrate full v2 report if stored, else reconstruct minimal shape
+      let report;
+      if (h.report_json) {
+        try { report = JSON.parse(h.report_json); } catch (_) { report = null; }
+      }
+
+      if (!report) {
+        report = {
+          reportVersion: 'v2',
+          generatedAt: h.created_date,
+          assetMeta: { symbol: h.asset, timeframe: h.timeframe || 'swing', locale: 'en', market: 'live' },
+          sections: buildFallbackSections(h.asset),
+          asset: h.asset,
+          summary: h.summary || '',
+          stance: h.stance || 'neutral',
+          confidence: h.confidence || 0,
+          thesis: h.thesis_json ? (() => { try { return JSON.parse(h.thesis_json); } catch (_) { return []; } })() : [],
+          riskFactors: h.risk_factors_json ? (() => { try { return JSON.parse(h.risk_factors_json); } catch (_) { return []; } })() : [],
+          disclaimer: DISCLAIMER,
+        };
+      }
+
+      return {
+        id: h.id,
+        requestId: h.request_id,
+        asset: h.asset,
+        depth: h.depth || h.mode || 'standard',
+        timeframe: h.timeframe || 'swing',
+        summary: h.summary,
+        stance: h.stance,
+        confidence: h.confidence,
+        createdAt: h.created_date,
+        modelUsed: h.model_used || null,
+        fallbackUsed: h.fallback_used || false,
+        latencyMs: h.latency_ms || null,
+        report,
+      };
+    });
 
     return ok({ items, nextCursor, total: all.length }, reqId);
   } catch (e) {
-    return err('INTERNAL_ERROR', e.message, true, 500);
+    return err('ASK_AI_ERROR', e.message, true, 500);
   }
 });

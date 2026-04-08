@@ -21,6 +21,18 @@
         "deep"
       ]
     },
+    "timeframe": {
+      "type": "string",
+      "description": "swing|scalp|longterm"
+    },
+    "depth": {
+      "type": "string",
+      "enum": [
+        "quick",
+        "standard",
+        "deep"
+      ]
+    },
     "summary": {
       "type": "string"
     },
@@ -40,6 +52,27 @@
     },
     "disclaimer": {
       "type": "string"
+    },
+    "report_json": {
+      "type": "string",
+      "description": "Full v2 report JSON stringified"
+    },
+    "model_used": {
+      "type": "string",
+      "description": "Model ID used for generation"
+    },
+    "fallback_used": {
+      "type": "boolean",
+      "default": false
+    },
+    "latency_ms": {
+      "type": "number"
+    },
+    "input_tokens": {
+      "type": "number"
+    },
+    "output_tokens": {
+      "type": "number"
     },
     "request_id": {
       "type": "string",
