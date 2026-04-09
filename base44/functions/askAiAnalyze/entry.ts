@@ -678,6 +678,8 @@ MACRO / SECTOR CONTEXT:
       ? `\n⚠️ DATA DESERT MODE: Standard market data providers (Finnhub/Alpaca) returned no data for "${asset}". This is likely a local/regional stock (e.g. Tel Aviv Stock Exchange, Warsaw, Tokyo, etc.). You MUST use your web search capability and training knowledge to find: current price, recent performance, fundamentals (revenue, P/E, market cap), recent news, and analyst coverage. State the exchange and currency clearly. Be transparent about uncertainty — do NOT fabricate specific numbers you cannot verify.\n`
       : '';
 
+    const needsLocalization = locale && locale !== 'en';
+
     const userPrompt = `Analyze ${asset} for a ${timeframe} ${depth} trade.
 ${dataDesertNote}
 LIVE MARKET DATA (from providers — may be null if asset is not US-listed):
@@ -704,8 +706,6 @@ CRITICAL OUTPUT RULES:
 - confidence: 0.0–1.0 (use the framework: 0.8+ = strong multi-signal alignment, 0.5–0.7 = mixed, <0.5 = contradictory or data-limited).
 - All 7 content sections must have non-empty content and at least 1 bullet.
 ${needsLocalization ? `- LOCALIZATION: You MUST also output a "localizedSummary" field — a concise 3-5 sentence summary of this entire report written in ${locale} (the user's language). The full report (all sections, bullets, thesis, riskFactors) must remain in English. Only localizedSummary is in ${locale}. Write it naturally, not as a translation — as if you were a local analyst speaking directly to the user.` : ''}`;
-
-    const needsLocalization = locale && locale !== 'en';
 
     const reportSchema = {
       type: 'object',
