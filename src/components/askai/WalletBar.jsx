@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Coins, Plus, RefreshCw, Flame } from 'lucide-react';
+import { Coins, Plus, RefreshCw, Flame, LogIn } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 
 function getRefillCountdown(lastAccrualDate) {
   if (!lastAccrualDate) return null;
@@ -14,7 +15,7 @@ function getRefillCountdown(lastAccrualDate) {
   return `+1 free token in ${h}h ${m}m`;
 }
 
-export default function WalletBar({ walletData, onBuyTokens, onRefresh }) {
+export default function WalletBar({ walletData, onBuyTokens, onRefresh, isLoggedIn }) {
   const [countdown, setCountdown] = useState(null);
 
   useEffect(() => {
@@ -28,6 +29,30 @@ export default function WalletBar({ walletData, onBuyTokens, onRefresh }) {
   const paid = walletData?.paidBalance ?? 0;
   const total = free + paid;
   const cap = walletData?.rules?.freeCap ?? 3;
+
+  if (isLoggedIn === false) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+        className="glass rounded-2xl p-4 flex items-center justify-between gap-3"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
+            <Coins className="w-5 h-5 text-violet-400" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white">Sign in to use your tokens</p>
+            <p className="text-xs text-white/30 mt-0.5">You get 1 free token every day — no card needed</p>
+          </div>
+        </div>
+        <button
+          onClick={() => base44.auth.redirectToLogin(window.location.href)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-xs font-bold hover:opacity-90 transition-opacity flex-shrink-0"
+        >
+          <LogIn className="w-3 h-3" /> Sign In
+        </button>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
@@ -55,7 +80,6 @@ export default function WalletBar({ walletData, onBuyTokens, onRefresh }) {
                 )}
               </div>
               <div className="flex items-center gap-1.5 mt-1">
-                {/* Free token progress bar */}
                 <div className="flex gap-0.5">
                   {Array.from({ length: cap }).map((_, i) => (
                     <div key={i} className={`w-3 h-1.5 rounded-full transition-all ${i < free ? 'bg-emerald-400' : 'bg-white/10'}`} />

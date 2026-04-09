@@ -32,6 +32,11 @@ export default function AskAI() {
   const reportRef = useRef(null);
   const qc = useQueryClient();
 
+  const [isLoggedIn, setIsLoggedIn] = useState(null);
+  useEffect(() => {
+    base44.auth.isAuthenticated().then(setIsLoggedIn);
+  }, []);
+
   const { data: walletData, refetch: refetchWallet } = useQuery({
     queryKey: ['wallet'],
     queryFn: async () => {
@@ -39,6 +44,7 @@ export default function AskAI() {
       return res.data?.data;
     },
     staleTime: 30 * 1000,
+    enabled: isLoggedIn === true,
   });
 
   // Handle PayPal return
@@ -122,7 +128,7 @@ export default function AskAI() {
       </motion.div>
 
       {/* Wallet Bar */}
-      <WalletBar walletData={walletData} onBuyTokens={() => setShowPacks(true)} onRefresh={refetchWallet} />
+      <WalletBar walletData={walletData} onBuyTokens={() => setShowPacks(true)} onRefresh={refetchWallet} isLoggedIn={isLoggedIn} />
 
       {/* Search Card */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
@@ -181,8 +187,8 @@ export default function AskAI() {
           )}
 
           <button
-            onClick={() => handleGenerate()}
-            disabled={!symbol || !canAfford || generating}
+            onClick={() => isLoggedIn ? handleGenerate() : base44.auth.redirectToLogin(window.location.href)}
+            disabled={!symbol || generating || (isLoggedIn && !canAfford)}
             className="w-full py-3.5 rounded-xl font-bold text-sm transition-all relative overflow-hidden group disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:opacity-90 shadow-lg shadow-violet-500/20"
           >
             <AnimatePresence mode="wait">
