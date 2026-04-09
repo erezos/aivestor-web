@@ -5,6 +5,21 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+
+async function invokeLLM(base44, prompt, schema) {
+  try {
+    return await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+  } catch (_) {}
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, temperature: 0.4, max_tokens: 2048 }),
+  });
+  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  return JSON.parse((await res.json()).choices[0].message.content);
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -31,8 +46,7 @@ Losers:  ${JSON.stringify(topLosers.map(a => ({ symbol: a.symbol, name: a.name, 
 Top news: ${JSON.stringify(news.slice(0, 8).map(n => ({ title: n.title, summary: n.summary, sentiment: n.sentiment })))}`
       : `Date: ${today}. No live data available — write based on general market context.`;
 
-    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `You are a senior financial journalist. Write a professional daily market wrap for ${today}.
+    const result = await invokeLLM(base44, `You are a senior financial journalist. Write a professional daily market wrap for ${today}.
 
 ${marketContext}
 
@@ -44,8 +58,7 @@ Write with these exact fields:
 - macro_outlook: 2-3 sentences on macro/Fed/rates/what to watch this week.
 - ai_insight: One bold, specific AI-generated prediction or contrarian insight (1-2 sentences, quote style).
 
-Tone: Bloomberg-level quality. Confident, specific, data-driven. No fluff.`,
-      response_json_schema: {
+Tone: Bloomberg-level quality. Confident, specific, data-driven. No fluff.`, {
         type: 'object',
         properties: {
           headline:          { type: 'string' },
@@ -56,8 +69,7 @@ Tone: Bloomberg-level quality. Confident, specific, data-driven. No fluff.`,
           ai_insight:        { type: 'string' },
         },
         required: ['headline', 'intro_paragraph']
-      }
-    });
+      });
 
     const wrap = {
       date: today,

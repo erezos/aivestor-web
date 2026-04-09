@@ -47,6 +47,21 @@ async function cryptoRSI(symbol) {
   return al === 0 ? 100 : 100 - 100 / (1 + ag / al);
 }
 
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+
+async function invokeLLM(base44, prompt, schema) {
+  try {
+    return await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+  } catch (_) {}
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, temperature: 0.3, max_tokens: 1024 }),
+  });
+  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  return JSON.parse((await res.json()).choices[0].message.content);
+}
+
 async function bgRefreshAI(base44, cleanSym, isCrypto, livePrice, liveChange, cacheEntry) {
   try {
     const now = Math.floor(Date.now() / 1000);
@@ -79,12 +94,10 @@ async function bgRefreshAI(base44, cleanSym, isCrypto, livePrice, liveChange, ca
     };
     if (newsData?.length) snap.news = newsData.map(h => h.slice(0, 80));
 
-    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Analyze ${cleanSym} using REAL live data: ${JSON.stringify(snap)}
+    const aiResult = await invokeLLM(base44, `Analyze ${cleanSym} using REAL live data: ${JSON.stringify(snap)}
 RSI is ${snap.rsiCtx || 'N/A'}. Analyst consensus: ${snap.rec}. ${snap.news ? `Recent headlines: ${JSON.stringify(snap.news)}` : ''}
 Give precise grounded analysis — no hallucination, use the numbers above.
-Output: signal(Strong Buy/Buy/Hold/Caution/Sell), confidence(0-100), 2-sentence summary, 6 indicator rows(RSI,MACD,Bollinger,SMA 50/200,Volume Trend,Stochastic) each with real-informed value+signal.`,
-      response_json_schema: {
+Output: signal(Strong Buy/Buy/Hold/Caution/Sell), confidence(0-100), 2-sentence summary, 6 indicator rows(RSI,MACD,Bollinger,SMA 50/200,Volume Trend,Stochastic) each with real-informed value+signal.`, {
         type: 'object',
         properties: {
           aiSignal:     { type: 'string' },
@@ -92,8 +105,7 @@ Output: signal(Strong Buy/Buy/Hold/Caution/Sell), confidence(0-100), 2-sentence 
           aiSummary:    { type: 'string' },
           indicators:   { type: 'array', items: { type: 'object', properties: { name:{type:'string'}, value:{type:'string'}, signal:{type:'string'} } } }
         }
-      }
-    });
+      });
 
     const analysisData = {
       name:         profile?.name || cleanSym,

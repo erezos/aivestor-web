@@ -7,6 +7,21 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
 const CRYPTO_SYMBOLS = new Set(['BTC','ETH','SOL','XRP','BNB','ADA','DOGE','AVAX','DOT','LINK','MATIC','LTC','ATOM','UNI','AAVE']);
 
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+
+async function invokeLLM(base44, prompt, schema) {
+  try {
+    return await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+  } catch (_) {}
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, temperature: 0.4, max_tokens: 2048 }),
+  });
+  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  return JSON.parse((await res.json()).choices[0].message.content);
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -30,8 +45,7 @@ Deno.serve(async (req) => {
     const isCrypto = CRYPTO_SYMBOLS.has(sym);
     const assetType = isCrypto ? 'cryptocurrency/blockchain project' : 'publicly traded company (stock)';
 
-    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Write a comprehensive investment profile for ${sym}, a ${assetType}.
+    const result = await invokeLLM(base44, `Write a comprehensive investment profile for ${sym}, a ${assetType}.
 
 Provide these 6 sections:
 1. overview: What does it do? Core business model in 2-3 sentences. Include market cap or key scale metric if known.
@@ -41,8 +55,7 @@ Provide these 6 sections:
 5. catalysts: Recent events or upcoming catalysts (earnings, product launches, regulation, partnerships) that could move the price.
 6. who_should_invest: Investor profile — risk tolerance, time horizon, portfolio fit.
 
-Be analytical, specific, and factual. Use real numbers where you know them. Avoid generic statements.`,
-      response_json_schema: {
+Be analytical, specific, and factual. Use real numbers where you know them. Avoid generic statements.`, {
         type: 'object',
         properties: {
           overview:          { type: 'string' },
@@ -53,8 +66,7 @@ Be analytical, specific, and factual. Use real numbers where you know them. Avoi
           who_should_invest: { type: 'string' },
         },
         required: ['overview', 'moat', 'risks']
-      }
-    });
+      });
 
     const sevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const profile = {

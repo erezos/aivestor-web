@@ -41,6 +41,21 @@ function summarizeHistory(history) {
   return `Beat ${beats}/${withData.length} recent quarters, avg surprise +${avgSurprise.toFixed(1)}%, last surprise ${last.surprisePct > 0 ? '+' : ''}${last.surprisePct}%`;
 }
 
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+
+async function invokeLLM(base44, prompt, schema) {
+  try {
+    return await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+  } catch (_) {}
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, temperature: 0.3, max_tokens: 2048 }),
+  });
+  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  return JSON.parse((await res.json()).choices[0].message.content);
+}
+
 async function aiEnrichBatch(base44, companies, historyMap) {
   const compact = companies.map(e => {
     const hist = historyMap[e.s];
@@ -53,16 +68,14 @@ async function aiEnrichBatch(base44, companies, historyMap) {
   });
 
   try {
-    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `You are a financial analyst. For these upcoming earnings reports, forecast volatility and sentiment.
+    const aiResult = await invokeLLM(base44, `You are a financial analyst. For these upcoming earnings reports, forecast volatility and sentiment.
 Use the EPS beat/miss history context to inform your analysis — a strong beat streak + high avg surprise = higher volatility and bullish bias.
 Companies with no history should default to Medium/neutral.
 Keep volatilityReason to 8 words max.
 
 Companies: ${JSON.stringify(compact)}
 
-Return JSON: {"analysis":[{"sym":"...","volatilityForecast":"Low|Medium|High","volatilityReason":"...","sentimentBias":"bullish|bearish|neutral"}]}`,
-      response_json_schema: {
+Return JSON: {"analysis":[{"sym":"...","volatilityForecast":"Low|Medium|High","volatilityReason":"...","sentimentBias":"bullish|bearish|neutral"}]}`, {
         type: 'object',
         properties: {
           analysis: {
@@ -79,8 +92,7 @@ Return JSON: {"analysis":[{"sym":"...","volatilityForecast":"Low|Medium|High","v
             }
           }
         }
-      }
-    });
+      });
     const map = {};
     (aiResult?.analysis || []).forEach(a => { map[a.sym] = a; });
     return map;

@@ -3,6 +3,21 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
 const FINNHUB_KEY = Deno.env.get('FINNHUB_API_KEY');
 
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+
+async function invokeLLM(base44, prompt, schema) {
+  try {
+    return await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+  } catch (_) {}
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, temperature: 0.3, max_tokens: 1024 }),
+  });
+  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  return JSON.parse((await res.json()).choices[0].message.content);
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -42,18 +57,15 @@ Deno.serve(async (req) => {
 
     // AI: select top 8 most market-moving + add sentiment + human-friendly time
     const nowSec = Math.floor(Date.now() / 1000);
-    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Financial news: ${JSON.stringify(compact)}
+    const aiResult = await invokeLLM(base44, `Financial news: ${JSON.stringify(compact)}
 Select 8 most market-impactful stories. For each: i, concise 1-sentence summary(max 110 chars, specific + actionable), sentiment(bullish/bearish/neutral), time_ago from now(${nowSec} unix, e.g. "2h ago","30m ago").
 Prefer high-impact macro, earnings, Fed, crypto, and tech stories.
-Return {selected:[{i,summary,sentiment,time_ago}]}`,
-      response_json_schema: {
+Return {selected:[{i,summary,sentiment,time_ago}]}`, {
         type: 'object',
         properties: {
           selected: { type: 'array', items: { type: 'object', properties: { i:{type:'number'}, summary:{type:'string'}, sentiment:{type:'string'}, time_ago:{type:'string'} } } }
         }
-      }
-    });
+      });
 
     const articles = (aiResult.selected || []).map(sel => {
       const orig = merged[sel.i];

@@ -7,6 +7,21 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
 const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
 
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+
+async function invokeLLM(base44, prompt, schema) {
+  try {
+    return await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+  } catch (_) {}
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, temperature: 0.3, max_tokens: 1024 }),
+  });
+  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  return JSON.parse((await res.json()).choices[0].message.content);
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -22,9 +37,7 @@ Deno.serve(async (req) => {
     }
 
     // Cache miss — call LLM
-    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Professional technical analyst. Last 30 closes for ${symbol}: ${JSON.stringify(recent)}. Current: ${currentPrice}, SMA20: ${sma20}, RSI(14): ${rsi}. Provide: summary (2 sentences), signal (Strong Buy/Buy/Hold/Sell/Strong Sell), enableIndicators (array from ["sma20","sma50","rsi"]), markers (up to 3: [{time: unix_ts from provided data, position: "belowBar"|"aboveBar", color: "#hex", shape: "arrowUp"|"arrowDown", text: "label"}]), supportLevel (number or null), resistanceLevel (number or null).`,
-      response_json_schema: {
+    const result = await invokeLLM(base44, `Professional technical analyst. Last 30 closes for ${symbol}: ${JSON.stringify(recent)}. Current: ${currentPrice}, SMA20: ${sma20}, RSI(14): ${rsi}. Provide: summary (2 sentences), signal (Strong Buy/Buy/Hold/Sell/Strong Sell), enableIndicators (array from ["sma20","sma50","rsi"]), markers (up to 3: [{time: unix_ts from provided data, position: "belowBar"|"aboveBar", color: "#hex", shape: "arrowUp"|"arrowDown", text: "label"}]), supportLevel (number or null), resistanceLevel (number or null).`, {
         type: 'object',
         properties: {
           summary:          { type: 'string' },
@@ -46,8 +59,7 @@ Deno.serve(async (req) => {
           supportLevel:    { type: 'number' },
           resistanceLevel: { type: 'number' },
         }
-      }
-    });
+      });
 
     // Persist cache
     const payload = { cache_key: cacheKey, data: JSON.stringify(result), refreshed_at: new Date().toISOString() };

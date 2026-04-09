@@ -36,6 +36,21 @@ function fmt(n) {
   return n.toLocaleString();
 }
 
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+
+async function invokeLLM(base44, prompt, schema) {
+  try {
+    return await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+  } catch (_) {}
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, temperature: 0.3, max_tokens: 1024 }),
+  });
+  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  return JSON.parse((await res.json()).choices[0].message.content);
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -68,18 +83,15 @@ Deno.serve(async (req) => {
     // AI signal: real price moves → momentum signals (compact, token-efficient)
     const priceFeed = all.map(a => ({ s: a.symbol, pct: +a.pct.toFixed(2), sector: a.sector || a.category }));
 
-    const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Real market % changes today: ${JSON.stringify(priceFeed)}
+    const aiResult = await invokeLLM(base44, `Real market % changes today: ${JSON.stringify(priceFeed)}
 Assign signal(Strong Buy/Buy/Hold/Caution/Sell) and aiScore(0-100) per asset.
 Rules: momentum >+3% leans Buy/Strong Buy; <-3% leans Caution/Sell; crypto more volatile; sector context matters.
-Return {signals:[{s,signal,aiScore}]}`,
-      response_json_schema: {
+Return {signals:[{s,signal,aiScore}]}`, {
         type: 'object',
         properties: {
           signals: { type: 'array', items: { type: 'object', properties: { s:{type:'string'}, signal:{type:'string'}, aiScore:{type:'number'} } } }
         }
-      }
-    });
+      });
 
     const sigMap = {};
     (aiResult.signals || []).forEach(s => { sigMap[s.s] = s; });
