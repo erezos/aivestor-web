@@ -8,12 +8,6 @@ import AskAiReport from '@/components/askai/AskAiReport';
 import AskAiHistory from '@/components/askai/AskAiHistory';
 import TokenPacksModal from '@/components/askai/TokenPacksModal';
 
-const DEPTH_OPTIONS = [
-  { id: 'quick',    label: 'Quick',    cost: 1, desc: 'Key signals only',         icon: Zap,       color: 'from-emerald-500 to-teal-500' },
-  { id: 'standard', label: 'Standard', cost: 2, desc: 'Balanced full analysis',   icon: BarChart2,  color: 'from-violet-500 to-fuchsia-500' },
-  { id: 'deep',     label: 'Deep',     cost: 3, desc: 'CFA-level deep dive',       icon: Brain,      color: 'from-amber-500 to-orange-500' },
-];
-
 const TIMEFRAME_OPTIONS = [
   { id: 'scalp',    label: 'Scalp',     desc: 'Minutes to hours' },
   { id: 'swing',    label: 'Swing',     desc: '2–10 days' },
@@ -27,7 +21,7 @@ export default function AskAI() {
   const preloadSymbol = urlParams.get('symbol') || '';
 
   const [symbol, setSymbol] = useState(preloadSymbol.toUpperCase());
-  const [depth, setDepth] = useState('standard');
+  const depth = 'deep';
   const [timeframe, setTimeframe] = useState('swing');
   const [report, setReport] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -156,31 +150,6 @@ export default function AskAI() {
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${symbol === s ? 'bg-violet-500/20 border-violet-500/40 text-violet-300' : 'bg-white/3 border-white/8 text-white/30 hover:text-white/60 hover:border-white/20'}`}
               >{s}</button>
             ))}
-          </div>
-        </div>
-
-        {/* Depth Selector */}
-        <div>
-          <label className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2 block">Analysis Depth</label>
-          <div className="grid grid-cols-3 gap-2">
-            {DEPTH_OPTIONS.map(opt => {
-              const Icon = opt.icon;
-              const active = depth === opt.id;
-              return (
-                <button key={opt.id} onClick={() => setDepth(opt.id)}
-                  className={`relative p-3 rounded-xl border text-left transition-all ${active ? 'border-violet-500/40 bg-violet-500/10' : 'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/5'}`}
-                >
-                  <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${opt.color} flex items-center justify-center mb-2`}>
-                    <Icon className="w-3 h-3 text-white" />
-                  </div>
-                  <div className={`text-xs font-bold ${active ? 'text-white' : 'text-white/60'}`}>{opt.label}</div>
-                  <div className="text-[10px] text-white/30 mt-0.5">{opt.desc}</div>
-                  <div className={`absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active ? 'bg-violet-500/30 text-violet-300' : 'bg-white/5 text-white/30'}`}>
-                    {opt.cost}🪙
-                  </div>
-                </button>
-              );
-            })}
           </div>
         </div>
 

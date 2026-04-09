@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Coins, Zap, Star, Crown, Smartphone, Sparkles, Loader2 } from 'lucide-react';
+import { X, Coins, Zap, Crown, Sparkles, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 
@@ -137,16 +137,8 @@ export default function TokenPacksModal({ open, onClose, onPurchaseComplete }) {
                 </div>
               )}
 
-              {/* App CTA */}
-              <div className="mt-5 p-4 rounded-xl bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 border border-violet-500/15 text-center">
-                <Smartphone className="w-6 h-6 text-violet-400 mx-auto mb-2" />
-                <p className="text-xs text-white/60 font-semibold">Purchase tokens in the mobile app</p>
-                <p className="text-[10px] text-white/25 mt-1">Your balance syncs instantly across all platforms</p>
-                <a href="https://apps.apple.com/us/app/technical-analysis-ai/id6746874804" target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-xs font-bold hover:opacity-90 transition-opacity"
-                >
-                  <Smartphone className="w-3 h-3" /> Open App to Purchase
-                </a>
+              <div className="mt-4 p-3 rounded-xl bg-white/3 border border-white/8 text-center">
+                <p className="text-[10px] text-white/30">Payments are processed securely via PayPal. Your token balance syncs instantly across web &amp; mobile.</p>
               </div>
             </div>
           </motion.div>

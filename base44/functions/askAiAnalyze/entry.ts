@@ -21,7 +21,7 @@ const ALPACA_HDR  = { 'APCA-API-KEY-ID': ALPACA_KEY, 'APCA-API-SECRET-KEY': ALPA
 const CRYPTO_SET  = new Set(['BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','DOT','MATIC','LINK','BNB']);
 
 const FEATURE_ENABLED = Deno.env.get('ASK_AI_SINGLE_INPUT_ENABLED') !== 'false';
-const TOKEN_COST = { quick: 1, standard: 2, deep: 3 };
+const TOKEN_COST = { quick: 1, standard: 1, deep: 1 };
 const MODEL_PRIMARY  = { deep: 'claude_sonnet_4_6', standard: 'gpt_5_mini', quick: 'gpt_5_mini' };
 const MODEL_FALLBACK = { deep: 'gpt_5',             standard: 'gpt_5_mini', quick: 'gpt_5_mini' };
 

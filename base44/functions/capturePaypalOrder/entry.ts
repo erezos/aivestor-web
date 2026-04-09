@@ -85,16 +85,20 @@ Deno.serve(async (req) => {
       note: `PayPal purchase: ${packId}`,
     });
 
-    // Update offer state
+    // Update offer state + mark one-time packs claimed
+    const ONE_TIME_PACKS = { 'starter_5_pack': 'starter_offer_claimed_at', 'second_25_pack': 'heavy_offer_claimed_at' };
+    const claimedField = ONE_TIME_PACKS[packId] || null;
+
     const offerRows = await base44.asServiceRole.entities.OfferState.filter({ user_id: userId });
+    const now = new Date().toISOString();
     if (offerRows.length > 0) {
-      await base44.asServiceRole.entities.OfferState.update(offerRows[0].id, {
-        purchase_count: (offerRows[0].purchase_count || 0) + 1,
-      });
+      const update = { purchase_count: (offerRows[0].purchase_count || 0) + 1 };
+      if (claimedField) update[claimedField] = now;
+      await base44.asServiceRole.entities.OfferState.update(offerRows[0].id, update);
     } else {
-      await base44.asServiceRole.entities.OfferState.create({
-        user_id: userId, purchase_count: 1, free_tokens_used_total: 0, config_version: 'v1',
-      });
+      const create = { user_id: userId, purchase_count: 1, free_tokens_used_total: 0, config_version: 'v1' };
+      if (claimedField) create[claimedField] = now;
+      await base44.asServiceRole.entities.OfferState.create(create);
     }
 
     return Response.json({ ok: true, tokens: tokenCount, alreadyCredited: false });
