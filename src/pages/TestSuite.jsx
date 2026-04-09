@@ -395,12 +395,9 @@ const TEST_DEFINITIONS = [
   }),
 
   makeTest('AskAI: askAiAnalyze rejects insufficient token balance', async () => {
-    // Use a fake requestId and ridiculous depth to trigger balance check
-    // We test the error code, not by actually draining tokens
     const walletRes = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
     const balance = walletRes.data?.data?.totalBalance ?? 0;
     if (balance >= 3) {
-      // Can't test this without draining — skip gracefully
       return;
     }
     const res = await base44.functions.invoke('askAiAnalyze', {
@@ -408,6 +405,54 @@ const TEST_DEFINITIONS = [
     });
     const errCode = res.data?.error?.code;
     if (errCode !== 'INSUFFICIENT_TOKENS') throw new Error(`Expected INSUFFICIENT_TOKENS, got: ${errCode}`);
+  }),
+
+  // ── needsLocalization regression (was crashing: "Cannot access before initialization") ──
+  makeTest('AskAI: locale=he does not crash (needsLocalization bug regression)', async () => {
+    const walletRes = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
+    const balance = walletRes.data?.data?.totalBalance ?? 0;
+    if (balance < 1) throw new Error(`Insufficient tokens (have ${balance}). Skipping.`);
+    const res = await base44.functions.invoke('askAiAnalyze', {
+      requestId: crypto.randomUUID(), asset: 'AAPL', depth: 'quick', timeframe: 'swing', locale: 'he',
+    });
+    if (res.data?.error) throw new Error('Locale test returned error: ' + res.data.error.message);
+    if (!res.data?.data?.report) throw new Error('No report returned for non-English locale');
+    if (!['bullish','bearish','neutral'].includes(res.data.data.report.stance)) throw new Error(`Invalid stance`);
+  }),
+
+  makeTest('AskAI: locale=en still works after needsLocalization fix', async () => {
+    const walletRes = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
+    const balance = walletRes.data?.data?.totalBalance ?? 0;
+    if (balance < 1) throw new Error(`Insufficient tokens (have ${balance}). Skipping.`);
+    const res = await base44.functions.invoke('askAiAnalyze', {
+      requestId: crypto.randomUUID(), asset: 'NVDA', depth: 'quick', timeframe: 'swing', locale: 'en',
+    });
+    if (res.data?.error) throw new Error('EN locale failed: ' + res.data.error.message);
+    if (!res.data?.data?.report?.sections?.length) throw new Error('No sections in report');
+  }),
+
+  // ── PayPal ────────────────────────────────────────────────────────────────
+  makeTest('PayPal: createPaypalOrder rejects missing required fields', async () => {
+    const res = await base44.functions.invoke('createPaypalOrder', { packId: 'tokens_5_pack' });
+    const isError = res.data?.error || res.status >= 400;
+    if (!isError) throw new Error('Expected error for missing fields but got success: ' + JSON.stringify(res.data));
+  }),
+
+  makeTest('PayPal: createPaypalOrder returns valid approvalUrl', async () => {
+    const res = await base44.functions.invoke('createPaypalOrder', {
+      packId: 'tokens_5_pack', tokens: 5, price: 1.99, returnUrl: 'https://example.com/return',
+    });
+    if (res.data?.error) throw new Error('createPaypalOrder error: ' + JSON.stringify(res.data.error));
+    if (!res.data?.approvalUrl) throw new Error('No approvalUrl: ' + JSON.stringify(res.data));
+    if (!res.data?.orderId) throw new Error('No orderId in response');
+    const url = new URL(res.data.approvalUrl);
+    if (!url.hostname.includes('paypal.com')) throw new Error(`approvalUrl not a PayPal URL: ${res.data.approvalUrl}`);
+  }),
+
+  makeTest('PayPal: capturePaypalOrder rejects missing orderId', async () => {
+    const res = await base44.functions.invoke('capturePaypalOrder', { packId: 'tokens_5_pack', tokens: 5 });
+    const isError = res.data?.error || res.status >= 400;
+    if (!isError) throw new Error('Expected error for missing orderId but got success');
   }),
 
 ];
