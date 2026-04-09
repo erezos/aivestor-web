@@ -1,6 +1,7 @@
 export default function Terms() {
   return (
-    <div className="max-w-3xl mx-auto py-10 px-6 text-white/80 space-y-6">
+    <div className="min-h-screen bg-[#0a0a0f] py-10 px-6">
+    <div className="max-w-3xl mx-auto text-white/80 space-y-6">
       <h1 className="text-3xl font-black text-white">Terms of Service</h1>
       <p className="text-white/40 text-sm">Last updated: April 9, 2026</p>
 
@@ -48,6 +49,7 @@ export default function Terms() {
         <h2 className="text-lg font-bold text-white">9. Contact</h2>
         <p>For questions about these Terms, contact us at: <a href="mailto:support@aivestor.online" className="text-violet-400 underline">support@aivestor.online</a></p>
       </section>
+    </div>
     </div>
   );
 }
