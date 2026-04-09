@@ -337,7 +337,7 @@ async function ensureWallet(base44, userId) {
 
 // ── Guardrails ────────────────────────────────────────────────────────────────
 function sanitize(text) {
-  if (!text) return text;
+  if (!text || typeof text !== 'string') return text;
   return text.replace(UNSAFE_WORDS, (m) => `[not ${m.toLowerCase()}]`);
 }
 
@@ -394,15 +394,18 @@ async function callGroq(systemPrompt, userPrompt, schema) {
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userPrompt   },
+        { role: 'system', content: systemPrompt + '\n\nYou MUST respond with valid JSON only.' },
+        { role: 'user',   content: userPrompt + '\n\nRespond with a valid JSON object.'   },
       ],
       response_format: { type: 'json_object' },
       temperature: 0.3,
       max_tokens: 4096,
     }),
   });
-  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Groq error: ${res.status} — ${errText}`);
+  }
   const json = await res.json();
   const text = json.choices?.[0]?.message?.content;
   if (!text) throw new Error('Groq returned empty content');
