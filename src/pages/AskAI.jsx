@@ -72,7 +72,7 @@ export default function AskAI() {
     }
   }, []);
 
-  const cost = DEPTH_OPTIONS.find(d => d.id === depth)?.cost ?? 2;
+  const cost = 1;
   const totalBalance = (walletData?.freeBalance ?? 0) + (walletData?.paidBalance ?? 0);
   const canAfford = totalBalance >= cost;
 
