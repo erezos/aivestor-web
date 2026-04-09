@@ -34,6 +34,7 @@ export default function AskAI() {
   const [showPacks, setShowPacks] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
+  const [paypalSuccess, setPaypalSuccess] = useState(false);
   const reportRef = useRef(null);
   const qc = useQueryClient();
 
@@ -45,6 +46,27 @@ export default function AskAI() {
     },
     staleTime: 30 * 1000,
   });
+
+  // Handle PayPal return
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('paypal_order_id') || params.get('token'); // PayPal returns 'token' param
+    const packId = params.get('pack_id');
+    const packTokens = params.get('pack_tokens');
+    if (orderId && packId && packTokens) {
+      base44.functions.invoke('capturePaypalOrder', { orderId, packId, tokens: parseInt(packTokens) })
+        .then((res) => {
+          if (res.data?.ok) {
+            setPaypalSuccess(true);
+            refetchWallet();
+            // Clean URL
+            window.history.replaceState({}, '', window.location.pathname);
+            setTimeout(() => setPaypalSuccess(false), 5000);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   // Auto-generate if symbol pre-loaded from Asset page
   const hasAutoRun = useRef(false);
@@ -213,6 +235,14 @@ export default function AskAI() {
             </AnimatePresence>
           </button>
         </div>
+
+        {paypalSuccess && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs"
+          >
+            ✅ Tokens purchased successfully! Your balance has been updated.
+          </motion.div>
+        )}
 
         {error && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}

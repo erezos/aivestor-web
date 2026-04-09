@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Coins, Zap, Star, Crown, Smartphone, Sparkles } from 'lucide-react';
+import { X, Coins, Zap, Star, Crown, Smartphone, Sparkles, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 
@@ -17,7 +17,31 @@ function getKind(pack) {
   return 'standard';
 }
 
-export default function TokenPacksModal({ open, onClose }) {
+export default function TokenPacksModal({ open, onClose, onPurchaseComplete }) {
+  const [loadingPack, setLoadingPack] = useState(null);
+
+  const handlePayPal = async (pack) => {
+    setLoadingPack(pack.packId);
+    try {
+      const returnUrl = window.location.origin + window.location.pathname;
+      const res = await base44.functions.invoke('createPaypalOrder', {
+        packId: pack.packId,
+        tokens: pack.tokens,
+        price: pack.price,
+        returnUrl,
+      });
+      if (res.data?.approvalUrl) {
+        window.location.href = res.data.approvalUrl;
+      } else {
+        alert('Failed to create PayPal order. Please try again.');
+      }
+    } catch (e) {
+      alert('Error: ' + e.message);
+    } finally {
+      setLoadingPack(null);
+    }
+  };
+
   const { data: packsData } = useQuery({
     queryKey: ['tokenPacks'],
     queryFn: async () => {
@@ -95,6 +119,18 @@ export default function TokenPacksModal({ open, onClose }) {
                             <div className="text-lg font-black text-white">${pack.price}</div>
                           </div>
                         </div>
+                        <button
+                          onClick={() => handlePayPal(pack)}
+                          disabled={!!loadingPack}
+                          className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-[#0070ba] hover:bg-[#005ea6] text-white text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                          {loadingPack === pack.packId ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <img src="https://www.paypalobjects.com/webstatic/mktg/Logo/pp-logo-100px.png" alt="PayPal" className="h-3.5" />
+                          )}
+                          {loadingPack === pack.packId ? 'Redirecting...' : 'Pay with PayPal'}
+                        </button>
                       </motion.div>
                     );
                   })}
