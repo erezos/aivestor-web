@@ -17,6 +17,12 @@ function Skeleton({ className }) {
   return <div className={`bg-white/5 rounded animate-pulse ${className}`} />;
 }
 
+function flatten(v) {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object' && v !== null) return Object.values(v).filter(x => typeof x === 'string').join(' ');
+  return String(v ?? '');
+}
+
 export default function AssetProfile({ symbol }) {
   const { data: profile, isLoading } = useQuery({
     queryKey: ['asset_profile', symbol],
@@ -25,11 +31,6 @@ export default function AssetProfile({ symbol }) {
     retry: 1,
     select: (data) => {
       if (!data || data.error) return data;
-      const flatten = (v) => {
-        if (typeof v === 'string') return v;
-        if (typeof v === 'object' && v !== null) return Object.values(v).filter(x => typeof x === 'string').join(' ');
-        return String(v ?? '');
-      };
       return {
         ...data,
         overview: flatten(data.overview),
@@ -40,6 +41,7 @@ export default function AssetProfile({ symbol }) {
         who_should_invest: flatten(data.who_should_invest),
       };
     },
+  });
 
   if (isLoading) return (
     <div className="glass rounded-2xl p-5 space-y-4">
