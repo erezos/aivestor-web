@@ -472,11 +472,12 @@ const TEST_DEFINITIONS = [
     const res = await base44.functions.invoke('refreshHotBoard', {});
     if (!res.data?.success) throw new Error('refreshHotBoard failed: ' + JSON.stringify(res.data));
     if (!res.data.count || res.data.count === 0) throw new Error('No assets in hotboard result');
-    // Verify signals are present in cached data
     const rows = await base44.entities.CachedData.filter({ cache_key: 'hotboard' });
     if (!rows.length) throw new Error('No hotboard cache after refresh');
     const items = JSON.parse(rows[0].data);
     if (!items[0]?.signal) throw new Error('Hotboard items missing signal field (Groq fallback may have failed)');
+    if (typeof items[0].signal !== 'string') throw new Error(`signal is not a string: ${typeof items[0].signal} — ${JSON.stringify(items[0].signal).slice(0,80)}`);
+    if (typeof items[0].symbol !== 'string') throw new Error('symbol is not a string');
   }),
 
   makeTest('Groq fallback: refreshMarketNews returns curated articles with sentiment', async () => {
@@ -488,6 +489,8 @@ const TEST_DEFINITIONS = [
     if (!articles.length) throw new Error('No articles in cache');
     if (!articles[0]?.sentiment) throw new Error('Articles missing sentiment (Groq fallback may have failed)');
     if (!articles[0]?.summary) throw new Error('Articles missing summary');
+    if (typeof articles[0].summary !== 'string') throw new Error(`summary is not a string: ${typeof articles[0].summary}`);
+    if (typeof articles[0].sentiment !== 'string') throw new Error(`sentiment is not a string: ${typeof articles[0].sentiment}`);
   }),
 
   makeTest('Groq fallback: generateMarketWrap returns structured wrap', async () => {
@@ -499,6 +502,10 @@ const TEST_DEFINITIONS = [
     const wrap = JSON.parse(rows[0].data);
     if (!wrap.headline) throw new Error('Wrap missing headline (Groq fallback may have failed)');
     if (!wrap.intro_paragraph) throw new Error('Wrap missing intro_paragraph');
+    const stringFields = ['headline', 'intro_paragraph', 'equities_section', 'crypto_section', 'macro_outlook', 'ai_insight'];
+    for (const field of stringFields) {
+      if (wrap[field] !== undefined && typeof wrap[field] !== 'string') throw new Error(`Wrap field "${field}" is not a string: ${typeof wrap[field]}`);
+    }
   }),
 
   makeTest('Groq fallback: generateAssetProfile returns all sections for AAPL', async () => {
@@ -511,19 +518,19 @@ const TEST_DEFINITIONS = [
   }),
 
   makeTest('Groq fallback: chartAiMagic returns signal and summary', async () => {
-    // Get fresh candles first
     const chartRes = await base44.functions.invoke('getChartData', { symbol: 'AAPL', range: '3mo' });
     const candles = chartRes.data;
     if (!candles?.length) throw new Error('No candles for chartAiMagic test');
     const recent = candles.slice(-30).map(c => ({ t: c.time, c: c.close }));
     const last = candles[candles.length - 1];
-    // Force cache miss by using a unique fake symbol pattern
     const res = await base44.functions.invoke('chartAiMagic', {
       symbol: 'AAPL', recent, currentPrice: last.close, sma20: String(last.close * 0.98), rsi: '52',
     });
     if (res.data?.error) throw new Error('chartAiMagic error: ' + res.data.error);
     if (!res.data?.signal) throw new Error('chartAiMagic missing signal (Groq fallback may have failed)');
     if (!res.data?.summary) throw new Error('chartAiMagic missing summary');
+    if (typeof res.data.signal !== 'string') throw new Error(`signal is not a string: ${typeof res.data.signal}`);
+    if (typeof res.data.summary !== 'string') throw new Error(`summary is not a string: ${typeof res.data.summary}`);
   }),
 
   makeTest('Groq fallback: getAssetAnalysis returns AI signal for AAPL', async () => {
@@ -532,6 +539,11 @@ const TEST_DEFINITIONS = [
     if (!res.data?.aiSignal) throw new Error('Missing aiSignal (Groq fallback may have failed)');
     if (!res.data?.aiSummary) throw new Error('Missing aiSummary');
     if (!res.data?.indicators?.length) throw new Error('Missing indicators array');
+    if (typeof res.data.aiSignal !== 'string') throw new Error(`aiSignal is not a string: ${typeof res.data.aiSignal}`);
+    if (typeof res.data.aiSummary !== 'string') throw new Error(`aiSummary is not a string: ${typeof res.data.aiSummary}`);
+    for (const ind of res.data.indicators) {
+      if (typeof ind.value !== 'string') throw new Error(`Indicator "${ind.name}" value is not a string: ${typeof ind.value}`);
+    }
   }),
 
 ];

@@ -61,6 +61,11 @@ Deno.serve(async (req) => {
         }
       });
 
+    // Flatten string fields — guard against Groq returning nested objects
+    const str = (v) => typeof v === 'string' ? v : (typeof v === 'object' && v ? Object.values(v).join(' ') : String(v ?? ''));
+    result.summary = str(result.summary);
+    result.signal  = str(result.signal);
+
     // Persist cache
     const payload = { cache_key: cacheKey, data: JSON.stringify(result), refreshed_at: new Date().toISOString() };
     if (cached) base44.asServiceRole.entities.CachedData.update(cached.id, payload).catch(() => {});

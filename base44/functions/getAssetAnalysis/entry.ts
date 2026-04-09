@@ -107,6 +107,9 @@ Output: signal(Strong Buy/Buy/Hold/Caution/Sell), confidence(0-100), 2-sentence 
         }
       });
 
+    // Flatten string fields — guard against Groq returning nested objects
+    const str = (v) => typeof v === 'string' ? v : (typeof v === 'object' && v ? Object.values(v).join(' ') : String(v ?? ''));
+
     const analysisData = {
       name:         profile?.name || cleanSym,
       sector:       profile?.finnhubIndustry || (isCrypto ? 'Crypto' : 'Equity'),
@@ -115,10 +118,10 @@ Output: signal(Strong Buy/Buy/Hold/Caution/Sell), confidence(0-100), 2-sentence 
       volume:       metrics?.metric?.['10DayAverageTradingVolume'] ? fmt(metrics.metric['10DayAverageTradingVolume'] * 1e6) : '—',
       high52:       metrics?.metric?.['52WeekHigh'] ?? null,
       low52:        metrics?.metric?.['52WeekLow']  ?? null,
-      aiSignal:     aiResult.aiSignal,
+      aiSignal:     str(aiResult.aiSignal),
       aiConfidence: aiResult.aiConfidence,
-      aiSummary:    aiResult.aiSummary,
-      indicators:   aiResult.indicators || [],
+      aiSummary:    str(aiResult.aiSummary),
+      indicators:   (aiResult.indicators || []).map(ind => ({ ...ind, name: str(ind.name), value: str(ind.value), signal: str(ind.signal) })),
       analystRec:   rec ? { buy: (rec.strongBuy||0)+(rec.buy||0), hold: rec.hold||0, sell: (rec.strongSell||0)+(rec.sell||0) } : null,
     };
 

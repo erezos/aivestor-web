@@ -71,9 +71,17 @@ Tone: Bloomberg-level quality. Confident, specific, data-driven. No fluff.`, {
         required: ['headline', 'intro_paragraph']
       });
 
+    // Flatten: guard against Groq returning nested objects instead of strings
+    const str = (v) => typeof v === 'string' ? v : (typeof v === 'object' && v ? Object.values(v).join(' ') : String(v ?? ''));
+
     const wrap = {
       date: today,
-      ...result,
+      headline:         str(result.headline),
+      intro_paragraph:  str(result.intro_paragraph),
+      equities_section: str(result.equities_section),
+      crypto_section:   str(result.crypto_section),
+      macro_outlook:    str(result.macro_outlook),
+      ai_insight:       str(result.ai_insight),
       top_movers: topMovers,
       generated_at: new Date().toISOString(),
     };
