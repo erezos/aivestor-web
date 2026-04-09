@@ -257,6 +257,112 @@ const TEST_DEFINITIONS = [
     await base44.entities.EmailSubscriber.delete(rec.id);
   }),
 
+  // ── Ask AI / Wallet ───────────────────────────────────────────────────────
+  makeTest('AskAI: getWallet returns valid balance structure', async () => {
+    const res = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
+    const d = res.data?.data;
+    if (d == null) throw new Error('No wallet data returned: ' + JSON.stringify(res.data));
+    if (typeof d.freeBalance !== 'number') throw new Error('freeBalance is not a number');
+    if (typeof d.paidBalance !== 'number') throw new Error('paidBalance is not a number');
+    if (typeof d.totalBalance !== 'number') throw new Error('totalBalance is not a number');
+    if (d.totalBalance !== d.freeBalance + d.paidBalance) throw new Error('totalBalance mismatch');
+    if (!d.rules?.dailyFreeGrant) throw new Error('Missing rules.dailyFreeGrant');
+  }),
+
+  makeTest('AskAI: listTokenPacks returns standard packs with correct shape', async () => {
+    const res = await base44.functions.invoke('listTokenPacks', { includeOffers: true, requestId: crypto.randomUUID() });
+    const packs = res.data?.data?.packs;
+    if (!Array.isArray(packs) || packs.length === 0) throw new Error('No packs returned');
+    const standard = packs.filter(p => p.kind === 'standard');
+    if (standard.length === 0) throw new Error('No standard packs returned');
+    for (const p of standard) {
+      if (!p.packId) throw new Error(`Pack missing packId: ${JSON.stringify(p)}`);
+      if (!p.tokens || p.tokens <= 0) throw new Error(`Pack has invalid tokens: ${JSON.stringify(p)}`);
+      if (!p.price || p.price <= 0) throw new Error(`Pack has invalid price: ${JSON.stringify(p)}`);
+      if (p.currency !== 'USD') throw new Error(`Unexpected currency: ${p.currency}`);
+    }
+  }),
+
+  makeTest('AskAI: getAskAiHistory returns paginated list', async () => {
+    const res = await base44.functions.invoke('getAskAiHistory', { limit: 10, requestId: crypto.randomUUID() });
+    const d = res.data?.data;
+    if (d == null) throw new Error('No data in response: ' + JSON.stringify(res.data));
+    if (!Array.isArray(d.items)) throw new Error('items is not an array');
+    if (typeof d.total !== 'number') throw new Error('total is not a number');
+  }),
+
+  makeTest('AskAI: getAskAiHistory items have required fields', async () => {
+    const res = await base44.functions.invoke('getAskAiHistory', { limit: 5, requestId: crypto.randomUUID() });
+    const items = res.data?.data?.items ?? [];
+    if (items.length === 0) return; // No history yet — skip field check
+    for (const item of items) {
+      if (!item.asset) throw new Error(`History item missing asset: ${JSON.stringify(item)}`);
+      if (!item.stance) throw new Error(`History item missing stance: ${JSON.stringify(item)}`);
+      if (item.confidence == null) throw new Error(`History item missing confidence`);
+      if (!item.report) throw new Error(`History item missing full report object`);
+      if (!item.report.sections?.length) throw new Error(`Report missing sections for ${item.asset}`);
+    }
+  }),
+
+  makeTest('AskAI: askAiAnalyze returns valid v2 report (AAPL, quick, costs 1 token)', async () => {
+    // Check balance first — skip if insufficient
+    const walletRes = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
+    const balance = walletRes.data?.data?.totalBalance ?? 0;
+    if (balance < 1) throw new Error(`Insufficient tokens to run this test (have ${balance}, need 1). Add tokens or wait for daily grant.`);
+
+    const res = await base44.functions.invoke('askAiAnalyze', {
+      requestId: crypto.randomUUID(),
+      asset: 'AAPL',
+      depth: 'quick',
+      timeframe: 'swing',
+      locale: 'en',
+    });
+    const d = res.data?.data;
+    if (res.data?.error) throw new Error('API returned error: ' + res.data.error.message);
+    if (!d?.report) throw new Error('No report in response');
+    if (d.report.reportVersion !== 'v2') throw new Error(`Wrong report version: ${d.report.reportVersion}`);
+    if (!['bullish','bearish','neutral'].includes(d.report.stance)) throw new Error(`Invalid stance: ${d.report.stance}`);
+    if (typeof d.report.confidence !== 'number') throw new Error('Confidence not a number');
+    if (!Array.isArray(d.report.sections) || d.report.sections.length < 7) throw new Error(`Not enough sections: ${d.report.sections?.length}`);
+    if (!d.wallet) throw new Error('Missing wallet in response');
+  }),
+
+  makeTest('AskAI: askAiAnalyze is idempotent (same requestId returns cached result)', async () => {
+    const reqId = crypto.randomUUID();
+    // First call
+    const walletRes = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
+    const balance = walletRes.data?.data?.totalBalance ?? 0;
+    if (balance < 1) throw new Error(`Insufficient tokens (have ${balance}). Skipping idempotency test.`);
+
+    const r1 = await base44.functions.invoke('askAiAnalyze', {
+      requestId: reqId, asset: 'MSFT', depth: 'quick', timeframe: 'swing', locale: 'en',
+    });
+    if (r1.data?.error) throw new Error('First call failed: ' + r1.data.error.message);
+    // Second call with SAME requestId — must return same result without billing again
+    const r2 = await base44.functions.invoke('askAiAnalyze', {
+      requestId: reqId, asset: 'MSFT', depth: 'quick', timeframe: 'swing', locale: 'en',
+    });
+    if (r2.data?.error) throw new Error('Idempotent call failed: ' + r2.data.error.message);
+    if (r1.data?.data?.report?.stance !== r2.data?.data?.report?.stance)
+      throw new Error('Idempotent call returned different stance');
+  }),
+
+  makeTest('AskAI: askAiAnalyze rejects insufficient token balance', async () => {
+    // Use a fake requestId and ridiculous depth to trigger balance check
+    // We test the error code, not by actually draining tokens
+    const walletRes = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
+    const balance = walletRes.data?.data?.totalBalance ?? 0;
+    if (balance >= 3) {
+      // Can't test this without draining — skip gracefully
+      return;
+    }
+    const res = await base44.functions.invoke('askAiAnalyze', {
+      requestId: crypto.randomUUID(), asset: 'AAPL', depth: 'deep', timeframe: 'swing', locale: 'en',
+    });
+    const errCode = res.data?.error?.code;
+    if (errCode !== 'INSUFFICIENT_TOKENS') throw new Error(`Expected INSUFFICIENT_TOKENS, got: ${errCode}`);
+  }),
+
 ];
 
 function statusIcon(status) {

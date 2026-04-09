@@ -16,6 +16,7 @@ import Education from './pages/Education';
 import Earnings from './pages/Earnings.jsx';
 import TestSuite from './pages/TestSuite';
 import MarketWrap from './pages/MarketWrap';
+import AskAI from './pages/AskAI';
 import Plus500Redirect from './pages/Plus500Redirect';
 import Plus500USRedirect from './pages/Plus500USRedirect';
 
@@ -55,6 +56,7 @@ const AuthenticatedApp = () => {
         <Route path="/Earnings" element={<Earnings />} />
         <Route path="/TestSuite" element={<TestSuite />} />
         <Route path="/MarketWrap" element={<MarketWrap />} />
+        <Route path="/AskAI" element={<AskAI />} />
       </Route>
       <Route path="/plus500" element={<Plus500Redirect />} />
       <Route path="/plus500us" element={<Plus500USRedirect />} />

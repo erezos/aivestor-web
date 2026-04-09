@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, Users } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Star, Share2, Zap, Users, Sparkles } from 'lucide-react';
 import KeyStats from '../components/asset/KeyStats';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -76,7 +76,14 @@ export default function Asset() {
               {isLoading ? <Skeleton className="h-4 w-40 mt-1" /> : <p className="text-sm text-white/30">{asset?.name} • {asset?.sector}</p>}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* AI Edge Report CTA */}
+            <Link to={`/AskAI?symbol=${symbol}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-xs font-bold hover:opacity-90 transition-opacity shadow-lg shadow-violet-500/20"
+              title="Get AI Edge Report"
+            >
+              <Sparkles className="w-3 h-3" /> AI Edge
+            </Link>
             {/* Star / Watchlist button */}
             <button
               onClick={toggleWatchlist}

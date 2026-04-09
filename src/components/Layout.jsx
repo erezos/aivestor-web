@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, TrendingUp, Star, BookOpen, 
   Newspaper, Smartphone,
-  CalendarDays, FlaskConical
+  CalendarDays, FlaskConical, Sparkles
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -18,6 +18,7 @@ const navItems = [
   { path: '/Watchlist', label: 'Watchlist', icon: Star },
   { path: '/Earnings', label: 'Earnings', icon: CalendarDays },
   { path: '/News', label: 'News', icon: Newspaper },
+  { path: '/AskAI', label: 'AI Edge', icon: Sparkles, highlight: true },
   { path: '/Education', label: 'Learn', icon: BookOpen },
 ];
 
@@ -89,6 +90,20 @@ export default function Layout() {
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map(item => {
               const isActive = location.pathname === item.path;
+              if (item.highlight) {
+                return (
+                  <Link key={item.path} to={item.path}
+                    className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                      isActive
+                        ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/20'
+                        : 'bg-gradient-to-r from-violet-600/80 to-fuchsia-600/80 text-white hover:opacity-90'
+                    }`}
+                  >
+                    <item.icon className="w-3.5 h-3.5" />
+                    {item.label}
+                  </Link>
+                );
+              }
               return (
                 <Link
                   key={item.path}
@@ -153,8 +168,10 @@ export default function Layout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all ${
-                  isActive ? 'text-violet-400' : 'text-white/30'
+                className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all ${
+                  item.highlight
+                    ? isActive ? 'text-fuchsia-400' : 'text-violet-400'
+                    : isActive ? 'text-violet-400' : 'text-white/30'
                 }`}
               >
                 <item.icon className="w-5 h-5" />
