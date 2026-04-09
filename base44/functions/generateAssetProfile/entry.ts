@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
 
     const result = await invokeLLM(base44, `Write a comprehensive investment profile for ${sym}, a ${assetType}.
 
-Provide these 6 sections:
+Provide these 6 sections as plain string values (NOT nested objects — each field must be a single string):
 1. overview: What does it do? Core business model in 2-3 sentences. Include market cap or key scale metric if known.
 2. revenue_model: How does it generate revenue/value? Key metrics (P/E, EPS growth, revenue CAGR for stocks; tokenomics, staking yield for crypto).
 3. moat: Top 2-3 competitive advantages or unique value propositions that protect it from competition.
@@ -55,15 +55,16 @@ Provide these 6 sections:
 5. catalysts: Recent events or upcoming catalysts (earnings, product launches, regulation, partnerships) that could move the price.
 6. who_should_invest: Investor profile — risk tolerance, time horizon, portfolio fit.
 
+IMPORTANT: Every field MUST be a plain string. Do not use nested JSON objects or arrays as field values.
 Be analytical, specific, and factual. Use real numbers where you know them. Avoid generic statements.`, {
         type: 'object',
         properties: {
-          overview:          { type: 'string' },
-          revenue_model:     { type: 'string' },
-          moat:              { type: 'string' },
-          risks:             { type: 'string' },
-          catalysts:         { type: 'string' },
-          who_should_invest: { type: 'string' },
+          overview:          { type: 'string', description: 'Plain text string, no nested objects' },
+          revenue_model:     { type: 'string', description: 'Plain text string, no nested objects' },
+          moat:              { type: 'string', description: 'Plain text string, no nested objects' },
+          risks:             { type: 'string', description: 'Plain text string, no nested objects' },
+          catalysts:         { type: 'string', description: 'Plain text string, no nested objects' },
+          who_should_invest: { type: 'string', description: 'Plain text string, no nested objects' },
         },
         required: ['overview', 'moat', 'risks']
       });

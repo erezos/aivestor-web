@@ -23,7 +23,23 @@ export default function AssetProfile({ symbol }) {
     queryFn: () => base44.functions.invoke('generateAssetProfile', { symbol }).then(r => r.data),
     staleTime: 6 * 60 * 60 * 1000,
     retry: 1,
-  });
+    select: (data) => {
+      if (!data || data.error) return data;
+      const flatten = (v) => {
+        if (typeof v === 'string') return v;
+        if (typeof v === 'object' && v !== null) return Object.values(v).filter(x => typeof x === 'string').join(' ');
+        return String(v ?? '');
+      };
+      return {
+        ...data,
+        overview: flatten(data.overview),
+        revenue_model: flatten(data.revenue_model),
+        moat: flatten(data.moat),
+        risks: flatten(data.risks),
+        catalysts: flatten(data.catalysts),
+        who_should_invest: flatten(data.who_should_invest),
+      };
+    },
 
   if (isLoading) return (
     <div className="glass rounded-2xl p-5 space-y-4">

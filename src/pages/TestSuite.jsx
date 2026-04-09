@@ -245,6 +245,18 @@ const TEST_DEFINITIONS = [
     if (!res2.data?.fromCache) throw new Error('Second call did not return from cache (wasting credits)');
   }),
 
+  makeTest('AssetProfile: all fields are plain strings — not nested objects (blank page regression)', async () => {
+    const res = await base44.functions.invoke('generateAssetProfile', { symbol: 'AAPL', forceRefresh: true });
+    if (res.data?.error) throw new Error('generateAssetProfile error: ' + res.data.error);
+    const stringFields = ['overview', 'revenue_model', 'moat', 'risks', 'catalysts', 'who_should_invest'];
+    for (const field of stringFields) {
+      const val = res.data?.[field];
+      if (val === undefined || val === null) continue; // optional fields ok
+      if (typeof val !== 'string') throw new Error(`Field "${field}" is not a string — it\'s a ${typeof val} (${JSON.stringify(val).slice(0,80)}). This causes a blank page crash!`);
+      if (val.trim() === '') throw new Error(`Field "${field}" is an empty string`);
+    }
+  }),
+
   makeTest('EmailSubscriber: can subscribe an email', async () => {
     const testEmail = '__test_subscriber__@aivestor.test';
     // Clean up any previous test record
