@@ -19,6 +19,9 @@ import MarketWrap from './pages/MarketWrap';
 import AskAI from './pages/AskAI';
 import Plus500Redirect from './pages/Plus500Redirect';
 import Plus500USRedirect from './pages/Plus500USRedirect';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
+import Refund from './pages/Refund';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -60,6 +63,9 @@ const AuthenticatedApp = () => {
       </Route>
       <Route path="/plus500" element={<Plus500Redirect />} />
       <Route path="/plus500us" element={<Plus500USRedirect />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/refund" element={<Refund />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
