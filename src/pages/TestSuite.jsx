@@ -455,6 +455,73 @@ const TEST_DEFINITIONS = [
     if (!isError) throw new Error('Expected error for missing orderId but got success');
   }),
 
+  // ── Groq Fallback ────────────────────────────────────────────────────────
+  makeTest('Groq fallback: refreshHotBoard returns valid signals', async () => {
+    const res = await base44.functions.invoke('refreshHotBoard', {});
+    if (!res.data?.success) throw new Error('refreshHotBoard failed: ' + JSON.stringify(res.data));
+    if (!res.data.count || res.data.count === 0) throw new Error('No assets in hotboard result');
+    // Verify signals are present in cached data
+    const rows = await base44.entities.CachedData.filter({ cache_key: 'hotboard' });
+    if (!rows.length) throw new Error('No hotboard cache after refresh');
+    const items = JSON.parse(rows[0].data);
+    if (!items[0]?.signal) throw new Error('Hotboard items missing signal field (Groq fallback may have failed)');
+  }),
+
+  makeTest('Groq fallback: refreshMarketNews returns curated articles with sentiment', async () => {
+    const res = await base44.functions.invoke('refreshMarketNews', {});
+    if (!res.data?.success) throw new Error('refreshMarketNews failed: ' + JSON.stringify(res.data));
+    const rows = await base44.entities.CachedData.filter({ cache_key: 'news' });
+    if (!rows.length) throw new Error('No news cache after refresh');
+    const articles = JSON.parse(rows[0].data);
+    if (!articles.length) throw new Error('No articles in cache');
+    if (!articles[0]?.sentiment) throw new Error('Articles missing sentiment (Groq fallback may have failed)');
+    if (!articles[0]?.summary) throw new Error('Articles missing summary');
+  }),
+
+  makeTest('Groq fallback: generateMarketWrap returns structured wrap', async () => {
+    const res = await base44.functions.invoke('generateMarketWrap', {});
+    if (!res.data?.success && !res.data?.headline) throw new Error('generateMarketWrap failed: ' + JSON.stringify(res.data));
+    const today = new Date().toISOString().split('T')[0];
+    const rows = await base44.entities.CachedData.filter({ cache_key: `market_wrap_${today}` });
+    if (!rows.length) throw new Error('No market wrap cache entry');
+    const wrap = JSON.parse(rows[0].data);
+    if (!wrap.headline) throw new Error('Wrap missing headline (Groq fallback may have failed)');
+    if (!wrap.intro_paragraph) throw new Error('Wrap missing intro_paragraph');
+  }),
+
+  makeTest('Groq fallback: generateAssetProfile returns all sections for AAPL', async () => {
+    const res = await base44.functions.invoke('generateAssetProfile', { symbol: 'AAPL', forceRefresh: true });
+    if (res.data?.error) throw new Error('generateAssetProfile error: ' + res.data.error);
+    if (!res.data?.overview) throw new Error('Profile missing overview (Groq fallback may have failed)');
+    if (!res.data?.moat) throw new Error('Profile missing moat');
+    if (!res.data?.risks) throw new Error('Profile missing risks');
+    if (!res.data?.generated_at) throw new Error('Profile missing generated_at timestamp');
+  }),
+
+  makeTest('Groq fallback: chartAiMagic returns signal and summary', async () => {
+    // Get fresh candles first
+    const chartRes = await base44.functions.invoke('getChartData', { symbol: 'AAPL', range: '3mo' });
+    const candles = chartRes.data;
+    if (!candles?.length) throw new Error('No candles for chartAiMagic test');
+    const recent = candles.slice(-30).map(c => ({ t: c.time, c: c.close }));
+    const last = candles[candles.length - 1];
+    // Force cache miss by using a unique fake symbol pattern
+    const res = await base44.functions.invoke('chartAiMagic', {
+      symbol: 'AAPL', recent, currentPrice: last.close, sma20: String(last.close * 0.98), rsi: '52',
+    });
+    if (res.data?.error) throw new Error('chartAiMagic error: ' + res.data.error);
+    if (!res.data?.signal) throw new Error('chartAiMagic missing signal (Groq fallback may have failed)');
+    if (!res.data?.summary) throw new Error('chartAiMagic missing summary');
+  }),
+
+  makeTest('Groq fallback: getAssetAnalysis returns AI signal for AAPL', async () => {
+    const res = await base44.functions.invoke('getAssetAnalysis', { symbol: 'AAPL' });
+    if (res.data?.error) throw new Error('getAssetAnalysis error: ' + res.data.error);
+    if (!res.data?.aiSignal) throw new Error('Missing aiSignal (Groq fallback may have failed)');
+    if (!res.data?.aiSummary) throw new Error('Missing aiSummary');
+    if (!res.data?.indicators?.length) throw new Error('Missing indicators array');
+  }),
+
 ];
 
 function statusIcon(status) {
