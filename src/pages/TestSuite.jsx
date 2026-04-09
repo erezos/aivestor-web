@@ -347,6 +347,53 @@ const TEST_DEFINITIONS = [
       throw new Error('Idempotent call returned different stance');
   }),
 
+  // ── Daily Free Token Grant ────────────────────────────────────────────────
+  makeTest('TokenGrant: dailyFreeTokenGrant runs without errors', async () => {
+    const res = await base44.functions.invoke('dailyFreeTokenGrant', {});
+    const d = res.data;
+    if (!d?.ok) throw new Error('Function returned ok=false: ' + JSON.stringify(d));
+    if (typeof d.stats?.scanned !== 'number') throw new Error('Missing stats.scanned');
+    if (d.stats.errors > 0) throw new Error(`Grant run had ${d.stats.errors} errors: ${JSON.stringify(d.stats.errorDetails)}`);
+  }),
+
+  makeTest('TokenGrant: idempotency — running twice produces no duplicate grants', async () => {
+    const r1 = await base44.functions.invoke('dailyFreeTokenGrant', {});
+    if (!r1.data?.ok) throw new Error('First run failed');
+    const granted1 = r1.data.stats.granted;
+
+    const r2 = await base44.functions.invoke('dailyFreeTokenGrant', {});
+    if (!r2.data?.ok) throw new Error('Second run failed');
+    const granted2 = r2.data.stats.granted;
+
+    // Same window key → all wallets already have ledger entries → granted should be 0
+    if (granted2 > 0) throw new Error(`Second run granted ${granted2} tokens — idempotency failed`);
+    if (r2.data.stats.alreadyGranted < granted1) throw new Error(`Expected alreadyGranted >= ${granted1}, got ${r2.data.stats.alreadyGranted}`);
+  }),
+
+  makeTest('TokenGrant: getWallet reflects balance after grant run', async () => {
+    // Run the grant
+    await base44.functions.invoke('dailyFreeTokenGrant', {});
+    // Fetch wallet — balance must be >= 0 and <= FREE_CAP (3)
+    const walletRes = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
+    const d = walletRes.data?.data;
+    if (d == null) throw new Error('No wallet data');
+    if (d.freeBalance < 0 || d.freeBalance > 3) throw new Error(`freeBalance out of range: ${d.freeBalance}`);
+    if (d.totalBalance !== d.freeBalance + d.paidBalance) throw new Error('totalBalance mismatch after grant');
+  }),
+
+  makeTest('TokenGrant: stats fields all present and numeric', async () => {
+    const res = await base44.functions.invoke('dailyFreeTokenGrant', {});
+    const s = res.data?.stats;
+    if (!s) throw new Error('No stats in response');
+    const required = ['scanned','eligible','granted','alreadyGranted','skippedNotDue','skippedAtCap','errors'];
+    for (const f of required) {
+      if (typeof s[f] !== 'number') throw new Error(`stats.${f} is not a number: ${s[f]}`);
+    }
+    // Sanity: eligible = granted + alreadyGranted + skippedAtCap (+ any errors)
+    const accounted = s.granted + s.alreadyGranted + s.skippedAtCap + s.errors;
+    if (accounted !== s.eligible) throw new Error(`eligible=${s.eligible} but accounted=${accounted} (granted+alreadyGranted+skippedAtCap+errors)`);
+  }),
+
   makeTest('AskAI: askAiAnalyze rejects insufficient token balance', async () => {
     // Use a fake requestId and ridiculous depth to trigger balance check
     // We test the error code, not by actually draining tokens
