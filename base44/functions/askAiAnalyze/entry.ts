@@ -382,13 +382,46 @@ function buildSections(raw, asset) {
   });
 }
 
-// ── AI call with one fallback retry ──────────────────────────────────────────
+// ── Groq direct API call (free fallback) ─────────────────────────────────────
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
+
+async function callGroq(systemPrompt, userPrompt, schema) {
+  if (!GROQ_KEY) throw new Error('GROQ_API_KEY not set');
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt   },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      max_tokens: 4096,
+    }),
+  });
+  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  const json = await res.json();
+  const text = json.choices?.[0]?.message?.content;
+  if (!text) throw new Error('Groq returned empty content');
+  return JSON.parse(text);
+}
+
+// ── AI call with Base44 primary + Groq free fallback ─────────────────────────
 // dataDesert = true when no provider had data → use Gemini with web search
 async function invokeWithFallback(base44, systemPrompt, userPrompt, schema, depth, dataDesert = false) {
   const primaryModel  = MODEL_PRIMARY[depth];
   const fallbackModel = MODEL_FALLBACK[depth];
 
-  // Data desert: no Finnhub + no Alpaca data → use Gemini web-grounded as primary
+  const callBase44 = (model) => base44.asServiceRole.integrations.Core.InvokeLLM({
+    prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
+    model,
+    response_json_schema: schema,
+  });
+
+  // Data desert: use Gemini web-grounded first, then Groq as free fallback
   if (dataDesert) {
     try {
       const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
@@ -399,28 +432,32 @@ async function invokeWithFallback(base44, systemPrompt, userPrompt, schema, dept
       });
       return { result, modelUsed: 'gemini_3_flash_web', fallbackUsed: false };
     } catch (_) {}
-    // Fallback: standard model with whatever it knows from training
-    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
-      model: fallbackModel,
-      response_json_schema: schema,
-    });
-    return { result, modelUsed: fallbackModel, fallbackUsed: true };
+
+    // Try Base44 fallback model
+    try {
+      const result = await callBase44(fallbackModel);
+      return { result, modelUsed: fallbackModel, fallbackUsed: true };
+    } catch (_) {}
+
+    // Last resort: Groq
+    const result = await callGroq(systemPrompt, userPrompt, schema);
+    return { result, modelUsed: `groq_${GROQ_MODEL}`, fallbackUsed: true };
   }
 
-  const callLLM = (model) => base44.asServiceRole.integrations.Core.InvokeLLM({
-    prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
-    model,
-    response_json_schema: schema,
-  });
-
+  // Normal path: Base44 primary → Base44 fallback → Groq free fallback
   try {
-    const result = await callLLM(primaryModel);
+    const result = await callBase44(primaryModel);
     return { result, modelUsed: primaryModel, fallbackUsed: false };
   } catch (_) {}
 
-  const result = await callLLM(fallbackModel);
-  return { result, modelUsed: fallbackModel, fallbackUsed: true };
+  try {
+    const result = await callBase44(fallbackModel);
+    return { result, modelUsed: fallbackModel, fallbackUsed: true };
+  } catch (_) {}
+
+  // Groq free fallback — fires when Base44 credits are exhausted
+  const result = await callGroq(systemPrompt, userPrompt, schema);
+  return { result, modelUsed: `groq_${GROQ_MODEL}`, fallbackUsed: true };
 }
 
 // ── CFA-style system prompt ───────────────────────────────────────────────────
