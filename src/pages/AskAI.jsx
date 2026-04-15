@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Search, ChevronDown, Clock, Zap, BarChart2, Brain, AlertTriangle, BookOpen, Target, Info } from 'lucide-react';
+import { Sparkles, Search, ChevronDown, Clock, Zap, BarChart2, Brain, AlertTriangle, BookOpen, Target, Info, TrendingUp, Shield, Activity, FileText, CheckCircle2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import WalletBar from '@/components/askai/WalletBar';
 import AskAiReport from '@/components/askai/AskAiReport';
 import AskAiHistory from '@/components/askai/AskAiHistory';
 import TokenPacksModal from '@/components/askai/TokenPacksModal';
+import GeneratingCard from '@/components/askai/GeneratingCard';
 
 const TIMEFRAME_OPTIONS = [
   { id: 'scalp',    label: 'Scalp',     desc: 'Minutes to hours' },
@@ -231,32 +232,7 @@ export default function AskAI() {
 
       {/* Generating animation */}
       <AnimatePresence>
-        {generating && (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-            className="glass rounded-2xl p-8 text-center space-y-4"
-          >
-            <div className="relative mx-auto w-16 h-16">
-              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 opacity-20 animate-ping" />
-              <div className="relative w-16 h-16 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 flex items-center justify-center">
-                <Brain className="w-7 h-7 text-white" />
-              </div>
-            </div>
-            <div>
-              <p className="text-white font-bold text-lg">Analyzing {symbol}</p>
-              <p className="text-white/40 text-sm mt-1">Running CFA-level multi-signal analysis...</p>
-            </div>
-            <div className="space-y-1.5 text-xs text-white/30 text-left max-w-xs mx-auto">
-              {['Fetching live market data','Calculating technical indicators','Scanning options flow & short interest','Checking insider activity & macro context','Synthesizing AI Edge Report'].map((step, i) => (
-                <motion.div key={step} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.4 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="w-1 h-1 rounded-full bg-violet-400" />
-                  {step}
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        )}
+        {generating && <GeneratingCard symbol={symbol} />}
       </AnimatePresence>
 
       {/* Report Output */}

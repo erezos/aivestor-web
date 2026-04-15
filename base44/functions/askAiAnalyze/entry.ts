@@ -115,10 +115,23 @@ function calcStoch(highs, lows, closes, k = 14) {
   return +((closes[closes.length - 1] - ll) / (hh - ll) * 100).toFixed(2);
 }
 
-// ── Fetch technicals from Alpaca ──────────────────────────────────────────────
+// ── Fetch raw OHLCV bars from Finnhub (fallback when Alpaca lacks coverage) ───
+async function fetchFinnhubBars(symbol, isCrypto) {
+  try {
+    const now   = Math.floor(Date.now() / 1000);
+    const from  = now - 150 * 86400;  // 150 days back
+    const fhSym = isCrypto ? `BINANCE:${symbol}USDT` : symbol;
+    const json  = await fhGet(`/stock/candle?symbol=${encodeURIComponent(fhSym)}&resolution=D&from=${from}&to=${now}`);
+    if (json?.s !== 'ok' || !json?.c?.length || json.c.length < 20) return null;
+    // Normalise to same shape as Alpaca bars
+    return json.c.map((c, i) => ({ c, h: json.h[i], l: json.l[i], o: json.o[i], v: json.v?.[i] || 0 }));
+  } catch (_) { return null; }
+}
+
+// ── Fetch technicals from Alpaca (with Finnhub candle fallback) ───────────────
 async function fetchTechnicals(symbol, isCrypto) {
   try {
-    const start = new Date(Date.now() - 120 * 86400000).toISOString();
+    const start = new Date(Date.now() - 150 * 86400000).toISOString();
     let bars = [];
 
     if (isCrypto) {
@@ -128,6 +141,12 @@ async function fetchTechnicals(symbol, isCrypto) {
     } else {
       const json = await alpacaGet(`https://data.alpaca.markets/v2/stocks/${encodeURIComponent(symbol)}/bars?timeframe=1Day&start=${start}&limit=200&sort=asc`);
       bars = json?.bars || [];
+    }
+
+    // ── Fallback: Finnhub candles (covers stocks Alpaca free tier misses) ─────
+    if (bars.length < 20) {
+      const fhBars = await fetchFinnhubBars(symbol, isCrypto);
+      if (fhBars && fhBars.length >= 20) bars = fhBars;
     }
 
     if (bars.length < 20) return null;
@@ -239,12 +258,15 @@ async function fetchInsiderActivity(symbol, isCrypto) {
 // ── Fetch macro/sector context (SPY, QQQ, VIX) ───────────────────────────────
 async function fetchMacroContext() {
   try {
-    const [spy, qqq, vix] = await Promise.all([
+    const [spy, qqq, vixA, vixB] = await Promise.all([
       fhGet('/quote?symbol=SPY'),
       fhGet('/quote?symbol=QQQ'),
-      fhGet('/quote?symbol=VIX'),
+      fhGet('/quote?symbol=^VIX'),          // Finnhub sometimes accepts ^VIX
+      fhGet('/quote?symbol=CBOE:VIX'),       // alternate
     ]);
-    const vixLevel = vix?.c || null;
+    // Pick first valid VIX reading
+    const vixRaw = [vixA, vixB].find(v => v?.c && v.c > 5 && v.c < 100);
+    const vixLevel = vixRaw?.c || null;
     const vixRegime = vixLevel == null ? null : vixLevel > 30 ? 'high_fear' : vixLevel > 20 ? 'elevated' : 'calm';
     return {
       spy:  spy?.c  ? { price: spy.c,  changePct: spy.dp  || 0 } : null,
@@ -412,17 +434,26 @@ async function callGroq(systemPrompt, userPrompt, schema) {
   if (!GROQ_KEY) throw new Error('GROQ_API_KEY not set');
 
   const condensedUser = condenseForGroq(userPrompt);
-  const groqSystem = `You are a professional financial analyst. Analyze the given market data and return a JSON report with these EXACT fields as plain strings:
-- summary: string (2-3 sentence overview)
-- stance: exactly one of "bullish", "bearish", or "neutral"
+  const groqSystem = `You are a senior financial analyst (CFA). Analyze the given market data and return a complete JSON report. MANDATORY: every single section must have real, substantive content — NEVER leave content empty or say "unavailable".
+
+Required JSON fields:
+- summary: string (3-4 sentence executive overview with stance, key catalyst, key risk)
+- stance: EXACTLY one of "bullish", "bearish", or "neutral"
 - confidence: number 0.0-1.0
-- thesis: array of 2-3 string bullet points (reasons to be bullish)
-- riskFactors: array of 2-3 string risk strings
-- sections: array of objects with id, title, content (string), bullets (array of strings)
+- thesis: array of 3 string bullet points (strongest bull arguments or reasons for stance)
+- riskFactors: array of 3 string risk bullets (concrete risks with price level conditions)
+- sections: array of 7 objects, each with: id (string), title (string), content (string, min 100 chars), bullets (array of 2-4 strings)
 
-Section ids MUST be exactly: market_snapshot, ai_conclusion, technical_view, sentiment_news_pulse, scenario_paths, risks_invalidations, action_playbook
+Section ids MUST be EXACTLY these 7 (in order):
+1. market_snapshot — macro context, price action, SPY/QQQ/VIX if available
+2. ai_conclusion — YOUR synthesis verdict, strongest signal, what changes your mind, clear recommendation
+3. technical_view — RSI/MACD/BB/SMA analysis OR price-action-based inference if indicators unavailable
+4. sentiment_news_pulse — news headlines, analyst consensus, options/short interest if available
+5. scenario_paths — 3 scenarios (bull/base/bear) with price targets and probabilities
+6. risks_invalidations — 4-5 risks with specific price levels or conditions that invalidate the thesis
+7. action_playbook — MANDATORY trading plan: entry price, stop-loss level, target 1, target 2, position sizing
 
-CRITICAL: Every field must be a plain string. No nested objects. Return valid JSON only.`;
+CRITICAL: Every field must be a plain string. No nested objects. action_playbook and ai_conclusion MUST have real content. Return valid JSON only.`;
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -740,9 +771,27 @@ MACRO / SECTOR CONTEXT:
 
     const needsLocalization = locale && locale !== 'en';
 
+    // Build a clear data-coverage note so the AI knows what it has to work with
+    const hasTech    = !!technicals;
+    const hasPrice   = !!(quote?.c);
+    const hasAnalyst = !!analystSentiment;
+    const hasEarnings = !!earningsCtx;
+
+    const dataCoverageNote = `
+DATA AVAILABILITY SUMMARY (for your awareness — use this to calibrate what you can and cannot cite directly):
+- Live price & daily change: ${hasPrice ? `YES ($${quote?.c}, ${quote?.dp?.toFixed(2)}% today)` : 'NO — use training knowledge to estimate'}
+- Technical indicators (RSI/MACD/BB/SMA): ${hasTech ? 'YES — use exact values provided' : 'NO — derive from price action, volatility profile, and training knowledge; provide reasonable estimates'}
+- Analyst consensus: ${hasAnalyst ? `YES — ${analystSentiment.total} analysts, ${analystSentiment.bullPct}% bullish` : 'NO — use training knowledge for well-known stocks, state unknown for obscure ones'}
+- Earnings context: ${hasEarnings ? `YES — next earnings ${earningsCtx.nextEarningsDate}` : 'NO — estimate timing from known quarterly cadence'}
+- Options flow: ${optionsSentiment ? 'YES' : 'NO — skip or note as unavailable'}
+- Short interest: ${shortInterest ? 'YES' : 'NO — estimate from sector norms and known short positions if applicable'}
+- Insider activity: ${insiderActivity ? 'YES' : 'NO — skip or note'}
+`;
+
     const userPrompt = `Analyze ${asset} for a ${timeframe} ${depth} trade.
 ${dataDesertNote}
-LIVE MARKET DATA (from providers — may be null if asset is not US-listed):
+${dataCoverageNote}
+LIVE MARKET DATA:
 ${JSON.stringify(marketContext, null, 2)}
 ${macroSection}
 ${techSection}
@@ -754,18 +803,35 @@ ${insiderSection}
 
 DEPTH REQUIREMENT: ${depthGuide}
 
-CRITICAL OUTPUT RULES:
-- ${dataDesert ? 'DATA DESERT: Use web search / training knowledge. Cite sources where possible. Be transparent about data freshness.' : 'Only reference numeric data from the data above. Do NOT fabricate price levels.'}
-- RSI, MACD, and SMA data MUST be mentioned in technical_view section (mark as unavailable if no data).
-- Analyst consensus MUST be mentioned in sentiment_news_pulse section.
-- Options flow, short interest, and insider activity MUST be mentioned in sentiment_news_pulse if available.
-- Macro context (VIX regime, SPY/QQQ trend) MUST be mentioned in market_snapshot section.
-- If earnings are within 14 days, it MUST be flagged in risks_invalidations AND scenario_paths.
-- action_playbook must reference specific price levels (from technical data if available, or web-sourced levels).
+═══════════════════════════════════════════════════
+MANDATORY OUTPUT RULES — NON-NEGOTIABLE:
+═══════════════════════════════════════════════════
+You MUST output ALL 7 sections. No section may have empty content or say "Analysis unavailable". 
+If you lack data for a section, SYNTHESIZE using: (a) other available data, (b) price action inference, (c) sector/peer comparisons, (d) your training knowledge. You are a senior analyst — you always form a view.
+
+SECTION-SPECIFIC MANDATORY CONTENT:
+
+1. market_snapshot: Describe macro context (SPY/QQQ/VIX if available, otherwise note market regime from your knowledge). Always state the current price and day's move.
+
+2. ai_conclusion: THIS IS YOUR SYNTHESIS SECTION — it must ALWAYS be fully generated. State your overall verdict, the single strongest signal driving your stance, and what would change your mind. Never leave this empty. Format: 2-3 paragraph professional conclusion with a clear buy/hold/sell recommendation and reasoning.
+
+3. technical_view: If indicators are provided, analyze them precisely. If NOT available, you MUST still provide technical analysis by: estimating trend direction from price vs. 52-week range, inferring momentum from day's price action, and noting what a trader should look for on a chart. Never say "all data unavailable" — always provide value.
+
+4. sentiment_news_pulse: Synthesize news headlines, analyst consensus, and market sentiment. If some data is missing, state what is known and what requires independent verification.
+
+5. scenario_paths: ALWAYS provide 3 scenarios (bull/base/bear) with specific price targets derived from available data or reasonable estimates. Include probabilities summing to ~100%.
+
+6. risks_invalidations: List 4-5 concrete risks with specific price levels or conditions that would invalidate the thesis. Always provide value even with limited data.
+
+7. action_playbook: MANDATORY — must ALWAYS contain a clear, actionable trading plan with: entry strategy, position sizing guidance, stop-loss reference level, and take-profit targets. Use current price as anchor. This section MUST NEVER be empty.
+
+ADDITIONAL RULES:
+- ${dataDesert ? 'DATA DESERT: Use your training knowledge and any web context. Be transparent about confidence levels.' : 'Use exact numeric data from above. Do NOT fabricate specific numbers not in the data.'}
 - stance: exactly bullish, bearish, or neutral.
-- confidence: 0.0–1.0 (use the framework: 0.8+ = strong multi-signal alignment, 0.5–0.7 = mixed, <0.5 = contradictory or data-limited).
-- All 7 content sections must have non-empty content and at least 1 bullet.
-${needsLocalization ? `- LOCALIZATION: You MUST also output a "localizedSummary" field — a concise 3-5 sentence summary of this entire report written in ${locale} (the user's language). The full report (all sections, bullets, thesis, riskFactors) must remain in English. Only localizedSummary is in ${locale}. Write it naturally, not as a translation — as if you were a local analyst speaking directly to the user.` : ''}`;
+- confidence: 0.0–1.0 (0.8+ = strong alignment, 0.5–0.7 = mixed signals, <0.5 = high uncertainty).
+- Each section MUST have at least 2 bullet points (minimum — more for deep analysis).
+- summary: 3-4 sentence executive overview covering stance, key catalyst, and key risk.
+${needsLocalization ? `- LOCALIZATION: Output a "localizedSummary" field — 3-5 sentence summary written in ${locale}. Full report remains in English. Only this field is in ${locale}.` : ''}`;
 
     const reportSchema = {
       type: 'object',
@@ -838,8 +904,95 @@ ${needsLocalization ? `- LOCALIZATION: You MUST also output a "localizedSummary"
       if (Array.isArray(aiRaw.thesis))      aiRaw.thesis      = aiRaw.thesis.map(t => typeof t === 'string' ? t : flattenToString(t));
       if (Array.isArray(aiRaw.riskFactors)) aiRaw.riskFactors = aiRaw.riskFactors.map(r => typeof r === 'string' ? r : flattenToString(r));
 
+      // ── Post-processing safety net: fill any empty/missing critical sections ─
+      // These sections should NEVER be empty — synthesize from available data
+      const stanceWord  = normalizeStance(aiRaw.stance || 'neutral');
+      const priceStr    = quote?.c ? `$${quote.c.toFixed(2)}` : 'current price';
+      const changeStr   = quote?.dp != null ? `${quote.dp > 0 ? '+' : ''}${quote.dp.toFixed(2)}%` : 'flat';
+      const analystStr  = analystSentiment ? `${analystSentiment.bullPct}% of ${analystSentiment.total} analysts rate it a Buy` : null;
+      const rsiStr      = technicals?.rsi ? `RSI(14) at ${technicals.rsi} (${technicals.rsiLabel})` : null;
+      const macdStr     = technicals?.macdInterpretation ? `MACD shows ${technicals.macdInterpretation}` : null;
+      const smaStr      = technicals?.sma50 ? `price ${technicals.priceVsSMA50} the 50-day SMA ($${technicals.sma50})` : null;
+      const vixStr      = macroCtx?.vix ? `VIX at ${macroCtx.vix.level} (${macroCtx.vix.regime})` : null;
+      const spyStr      = macroCtx?.spy ? `SPY ${macroCtx.spy.changePct > 0 ? '+' : ''}${macroCtx.spy.changePct.toFixed(2)}%` : null;
+
+      aiRaw.sections = aiRaw.sections || [];
+
+      // Helper: check if a section has real content
+      const isSectionEmpty = (id) => {
+        const sec = aiRaw.sections.find(s => s.id === id);
+        if (!sec) return true;
+        const c = sec.content || '';
+        return c.trim() === '' || c.toLowerCase().includes('analysis unavailable') || c.trim().length < 30;
+      };
+
+      // Synthesize ai_conclusion if missing/empty
+      if (isSectionEmpty('ai_conclusion')) {
+        const topSignals = [analystStr, rsiStr, macdStr, smaStr].filter(Boolean).slice(0, 2).join('; ') || 'price action and market context';
+        const bullets = [
+          `Verdict: ${stanceWord.toUpperCase()} — driven by ${topSignals}.`,
+          `Key catalyst: ${earningsCtx ? `upcoming earnings ${earningsCtx.nextEarningsDate}` : analystStr ? 'analyst consensus' : 'macro trend'}.`,
+          `Confidence ${Math.round((aiRaw.confidence || 0.5) * 100)}%: ${(aiRaw.confidence || 0.5) > 0.7 ? 'strong signal alignment' : 'mixed signals — use smaller position size'}.`,
+        ];
+        const content = `${asset} verdict: ${stanceWord.toUpperCase()} at ${priceStr} (${changeStr} today). ${topSignals ? `Key signals: ${topSignals}. ` : ''}${stanceWord === 'bullish' ? 'Risk/reward favors long exposure with defined stop-loss.' : stanceWord === 'bearish' ? 'Caution warranted — reduce exposure or hedge.' : 'Wait for catalyst-driven breakout before committing capital.'}`;
+        const idx = aiRaw.sections.findIndex(s => s.id === 'ai_conclusion');
+        if (idx >= 0) { aiRaw.sections[idx].content = content; aiRaw.sections[idx].bullets = bullets; }
+        else aiRaw.sections.push({ id: 'ai_conclusion', title: 'AI Conclusion', content, bullets });
+      }
+
+      // Synthesize action_playbook if missing/empty
+      if (isSectionEmpty('action_playbook')) {
+        const p = quote?.c || 0;
+        const stopPct    = timeframe === 'scalp' ? 0.02 : timeframe === 'swing' ? 0.06 : 0.12;
+        const t1Pct      = timeframe === 'scalp' ? 0.015 : timeframe === 'swing' ? 0.08 : 0.20;
+        const t2Pct      = timeframe === 'scalp' ? 0.03  : timeframe === 'swing' ? 0.15 : 0.35;
+        const stopPrice  = p > 0 ? `$${(p * (1 - stopPct)).toFixed(2)}` : 'prior swing low';
+        const t1Price    = p > 0 ? `$${(p * (1 + t1Pct)).toFixed(2)}` : 'first resistance';
+        const t2Price    = p > 0 ? `$${(p * (1 + t2Pct)).toFixed(2)}` : 'extended target';
+        const content = `${asset} ${timeframe} ${stanceWord} playbook: Entry near ${priceStr}. Stop-loss ${stopPrice} (${Math.round(stopPct*100)}% risk). Target 1: ${t1Price}, Target 2: ${t2Price}. Risk max 1-2% of portfolio. ${(aiRaw.confidence || 0.5) < 0.6 ? 'Lower confidence — use half-size position.' : ''}`;
+        const bullets = [
+          `Entry: ${stanceWord !== 'bearish' ? `Accumulate near ${priceStr}` : `Reduce long exposure at ${priceStr}`}. Staged entry preferred.`,
+          `Stop-loss: ${stopPrice} — exit if breached on daily close.`,
+          `Target 1: ${t1Price} — take 40% profit. Trail stop to breakeven.`,
+          `Target 2: ${t2Price} — hold remainder for full ${timeframe} move.`,
+        ];
+        const idx = aiRaw.sections.findIndex(s => s.id === 'action_playbook');
+        if (idx >= 0) { aiRaw.sections[idx].content = content; aiRaw.sections[idx].bullets = bullets; }
+        else aiRaw.sections.push({ id: 'action_playbook', title: 'Action Playbook', content, bullets });
+      }
+
+      // Synthesize technical_view if missing/empty and we have price data
+      if (isSectionEmpty('technical_view') && hasPrice) {
+        const p = quote.c;
+        const w52h = marketContext.week52High, w52l = marketContext.week52Low;
+        const rangePos = (w52h && w52l) ? Math.round((p - w52l) / (w52h - w52l) * 100) : null;
+        const content = `Technical indicators unavailable via providers for ${asset}. Price action: ${priceStr} (${changeStr}). ${rangePos != null ? `At ${rangePos}% of 52-week range ($${w52l}–$${w52h}) — ${rangePos > 70 ? 'upper range/momentum' : rangePos < 30 ? 'near lows/value zone' : 'mid-range'}.` : ''} Verify RSI/MACD/SMA on TradingView before entry.`;
+        const bullets = [
+          rangePos != null ? `52-week range: ${rangePos}% from low (${rangePos > 70 ? 'momentum zone' : rangePos < 30 ? 'value zone' : 'neutral'}).` : `Confirm trend via SMA20/50 on chart.`,
+          `Intraday: High $${quote.h?.toFixed(2)}, Low $${quote.l?.toFixed(2)}, Prior close $${quote.pc?.toFixed(2)}.`,
+          `Action: ${Math.abs(quote.dp || 0) > 3 ? 'Significant move — verify volume confirms on chart.' : 'Normal volatility — wait for breakout confirmation.'}`,
+        ];
+        const idx = aiRaw.sections.findIndex(s => s.id === 'technical_view');
+        if (idx >= 0) { aiRaw.sections[idx].content = content; aiRaw.sections[idx].bullets = bullets; }
+        else aiRaw.sections.push({ id: 'technical_view', title: 'Technical View', content, bullets });
+      }
+
       const normalizedStance     = normalizeStance(aiRaw.stance);
       const normalizedConfidence = clampConfidence(aiRaw.confidence);
+
+      // ── Trim to prevent DB field-size overflow ────────────────────────────────
+      // Target: report_json < 60KB. Trim aggressively at the section level.
+      if (Array.isArray(aiRaw.sections)) {
+        aiRaw.sections = aiRaw.sections.map(s => ({
+          ...s,
+          content: typeof s.content === 'string' ? s.content.slice(0, 1800) : s.content,
+          bullets: Array.isArray(s.bullets) ? s.bullets.slice(0, 5).map(b => typeof b === 'string' ? b.slice(0, 280) : b) : [],
+        }));
+      }
+      if (Array.isArray(aiRaw.thesis))      aiRaw.thesis      = aiRaw.thesis.slice(0, 5).map(t => typeof t === 'string' ? t.slice(0, 280) : t);
+      if (Array.isArray(aiRaw.riskFactors)) aiRaw.riskFactors = aiRaw.riskFactors.slice(0, 5).map(r => typeof r === 'string' ? r.slice(0, 280) : r);
+      if (typeof aiRaw.summary === 'string') aiRaw.summary = aiRaw.summary.slice(0, 600);
+
       const sections             = buildSections(aiRaw, asset);
       const thesis               = (aiRaw.thesis || []).map(sanitize);
       const riskFactors          = (aiRaw.riskFactors || []).map(sanitize);
