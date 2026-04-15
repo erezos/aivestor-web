@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { BarChart3, Clock, Zap, Target } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchHotBoard } from '../marketData';
@@ -43,11 +42,8 @@ export default function QuickStats() {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {stats.map((stat, i) => (
-        <motion.div
+        <div
           key={stat.label}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.08 }}
           className="glass rounded-2xl p-4 relative overflow-hidden group cursor-pointer glass-hover transition-all"
         >
           <div className={`absolute top-0 right-0 w-20 h-20 bg-gradient-to-br ${stat.color} opacity-5 rounded-full -translate-y-6 translate-x-6 group-hover:opacity-10 transition-opacity`} />
@@ -56,7 +52,7 @@ export default function QuickStats() {
           </div>
           <div className="text-2xl font-bold text-white">{stat.value}</div>
           <div className="text-[11px] text-white/40 font-medium mt-0.5">{stat.label}</div>
-        </motion.div>
+        </div>
       ))}
     </div>
   );
