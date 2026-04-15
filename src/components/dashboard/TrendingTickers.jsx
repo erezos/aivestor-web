@@ -18,8 +18,6 @@ function getSignalColor(signal) {
   return 'bg-rose-500/20 text-rose-400 border-rose-500/30';
 }
 
-const SKELETON_COUNT = 6;
-
 function TickerRow({ ticker }) {
   if (!ticker || typeof ticker.symbol !== 'string') return null;
   const signal = SIGNALS[ticker.symbol] || 'Hold';
@@ -82,7 +80,7 @@ export default function TrendingTickers() {
 
       <div className="space-y-1">
         {isLoading
-          ? Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+          ? Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex items-center justify-between py-2.5 px-3 rounded-xl">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-white/5 animate-pulse" />
