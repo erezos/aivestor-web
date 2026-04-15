@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { Clock, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -43,12 +42,9 @@ export default function LatestNews() {
                 </div>
               </div>
             ))
-          : (articles || []).slice(0, 5).map((article, i) => (
-              <motion.div
+          : (articles || []).filter(Boolean).slice(0, 5).map((article, i) => (
+              <div
                 key={i}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: i * 0.06 }}
                 className="py-3 px-3 rounded-xl glass-hover transition-all cursor-pointer group"
               >
                 <div className="flex items-start gap-3">
@@ -74,7 +70,7 @@ export default function LatestNews() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))
         }
       </div>

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { fetchMarketSentiment } from '../marketData';
 
@@ -109,12 +108,9 @@ export default function MarketSentiment() {
               <span className="text-xs text-white/40">{ind.name}</span>
               <div className="flex items-center gap-2">
                 <div className="w-16 h-1.5 rounded-full bg-white/5 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${ind.value}%` }}
-                    transition={{ duration: 1, delay: 0.5 }}
-                    className="h-full rounded-full"
-                    style={{ background: getSentimentColor(ind.value) }}
+                  <div
+                    className="h-full rounded-full transition-all duration-1000"
+                    style={{ width: `${ind.value}%`, background: getSentimentColor(ind.value) }}
                   />
                 </div>
                 <span className="text-xs font-medium" style={{ color: getSentimentColor(ind.value) }}>
