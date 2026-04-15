@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchTrendingTickers } from '../marketData';
 
-// Signal is still AI-generated per ticker (kept static for now, based on price momentum)
 const SIGNALS = {
   'NVDA': 'Strong Buy', 'TSLA': 'Buy', 'AAPL': 'Hold',
   'META': 'Hold', 'MSFT': 'Buy', 'BTC': 'Hold',
@@ -21,6 +20,38 @@ function getSignalColor(signal) {
 
 const SKELETON_COUNT = 6;
 
+function TickerRow({ ticker }) {
+  const signal = SIGNALS[ticker.symbol] || 'Hold';
+  return (
+    <Link
+      to={`/Asset?symbol=${ticker.symbol}`}
+      className="flex items-center justify-between py-2.5 px-3 rounded-xl glass-hover transition-all group cursor-pointer"
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-white/5 flex items-center justify-center">
+          <span className="text-xs font-bold text-violet-300">{ticker.symbol.slice(0, 2)}</span>
+        </div>
+        <div>
+          <div className="text-sm font-semibold text-white group-hover:text-violet-300 transition-colors">{ticker.symbol}</div>
+          <div className="text-[11px] text-white/30">{ticker.name}</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getSignalColor(signal)}`}>
+          {signal}
+        </span>
+        <div className="text-right">
+          <div className="text-sm font-semibold text-white">${ticker.price}</div>
+          <div className={`text-xs font-medium flex items-center gap-0.5 justify-end ${ticker.positive ? 'text-gain' : 'text-loss'}`}>
+            {ticker.positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {ticker.change}
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 export default function TrendingTickers() {
   const { data: tickers, isLoading } = useQuery({
     queryKey: ['trendingTickers'],
@@ -29,13 +60,15 @@ export default function TrendingTickers() {
     retry: 1,
   });
 
+  const validTickers = Array.isArray(tickers) ? tickers.filter(t => t && typeof t.symbol === 'string') : [];
+
   return (
     <div className="glass rounded-2xl p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Flame className="w-4 h-4 text-orange-400" />
           <h3 className="text-sm font-semibold text-white/80">Trending Now</h3>
-          {!isLoading && tickers && (
+          {!isLoading && validTickers.length > 0 && (
             <span className="text-[10px] text-white/20 font-medium">Live</span>
           )}
         </div>
@@ -61,35 +94,8 @@ export default function TrendingTickers() {
                 </div>
               </div>
             ))
-          : (tickers || []).filter(t => t && t.symbol).map((ticker, i) => (
-              <div key={ticker.symbol}>
-                <Link
-                  to={`/Asset?symbol=${ticker.symbol}`}
-                  className="flex items-center justify-between py-2.5 px-3 rounded-xl glass-hover transition-all group cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-white/5 flex items-center justify-center">
-                      <span className="text-xs font-bold text-violet-300">{ticker.symbol.slice(0,2)}</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-white group-hover:text-violet-300 transition-colors">{ticker.symbol}</div>
-                      <div className="text-[11px] text-white/30">{ticker.name}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getSignalColor(SIGNALS[ticker.symbol] || 'Hold')}`}>
-                      {SIGNALS[ticker.symbol] || 'Hold'}
-                    </span>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-white">${ticker.price}</div>
-                      <div className={`text-xs font-medium flex items-center gap-0.5 justify-end ${ticker.positive ? 'text-gain' : 'text-loss'}`}>
-                        {ticker.positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                        {ticker.change}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              </div>
+          : validTickers.map(ticker => (
+              <TickerRow key={ticker.symbol} ticker={ticker} />
             ))
         }
       </div>
