@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       user_id: userId,
       intent_id: orderId,
       transaction_id: orderId,
-      platform: 'apple', // reusing field — treat as 'web'
+      platform: 'google', // reusing 'google' as proxy for 'web' — closest available enum value
       product_id: packId,
       raw_receipt_json: JSON.stringify(captureJson),
       status: 'completed',
