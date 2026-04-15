@@ -53,7 +53,18 @@ const CHART_THEME = {
   rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
 };
 
-export default function TechnicalChart({ symbol }) {
+function injectLiveCandle(candles, livePrice) {
+  if (!livePrice || !candles.length) return candles;
+  const todayTs = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+  const last = candles[candles.length - 1];
+  // Replace today's candle or append a new one
+  const updated = candles[candles.length - 1].time === todayTs
+    ? [...candles.slice(0, -1), { ...last, close: livePrice, high: Math.max(last.high, livePrice), low: Math.min(last.low, livePrice) }]
+    : [...candles, { time: todayTs, open: last.close, high: Math.max(last.close, livePrice), low: Math.min(last.close, livePrice), close: livePrice }];
+  return updated;
+}
+
+export default function TechnicalChart({ symbol, livePrice }) {
   const mainRef = useRef(null);
   const rsiRef  = useRef(null);
   const chartMain  = useRef(null);
@@ -175,7 +186,7 @@ export default function TechnicalChart({ symbol }) {
     fetchCandles(symbol, range)
       .then(data => {
         if (cancelled) return;
-        setCandles(data);
+        setCandles(injectLiveCandle(data, livePrice));
         setLoading(false);
       })
       .catch(() => {
@@ -187,6 +198,13 @@ export default function TechnicalChart({ symbol }) {
       destroyCharts();
     };
   }, [symbol, range, destroyCharts]);
+
+  // Update last candle when live price arrives/changes
+  useEffect(() => {
+    if (!livePrice || !candles.length) return;
+    setCandles(prev => injectLiveCandle(prev, livePrice));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [livePrice]);
 
   // Build charts once divs are visible and data is ready
   useEffect(() => {

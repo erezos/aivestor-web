@@ -127,7 +127,7 @@ export default function Asset() {
       </motion.div>
 
       {/* Chart */}
-      <TechnicalChart symbol={symbol} />
+      <TechnicalChart symbol={symbol} livePrice={displayPrice} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* AI Analysis */}
