@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { Flame, TrendingUp, TrendingDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -63,12 +62,7 @@ export default function TrendingTickers() {
               </div>
             ))
           : (tickers || []).filter(t => t && t.symbol).map((ticker, i) => (
-              <motion.div
-                key={ticker.symbol}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.04 }}
-              >
+              <div key={ticker.symbol}>
                 <Link
                   to={`/Asset?symbol=${ticker.symbol}`}
                   className="flex items-center justify-between py-2.5 px-3 rounded-xl glass-hover transition-all group cursor-pointer"
@@ -95,7 +89,7 @@ export default function TrendingTickers() {
                     </div>
                   </div>
                 </Link>
-              </motion.div>
+              </div>
             ))
         }
       </div>
