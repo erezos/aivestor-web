@@ -62,7 +62,7 @@ export default function TrendingTickers() {
                 </div>
               </div>
             ))
-          : (tickers || []).map((ticker, i) => (
+          : (tickers || []).filter(Boolean).map((ticker, i) => (
               <motion.div
                 key={ticker.symbol}
                 initial={{ opacity: 0, x: -10 }}
