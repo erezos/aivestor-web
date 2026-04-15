@@ -18,7 +18,8 @@
       "type": "string",
       "enum": [
         "apple",
-        "google"
+        "google",
+        "web"
       ]
     },
     "product_id": {
