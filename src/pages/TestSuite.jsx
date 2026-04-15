@@ -339,6 +339,43 @@ const TEST_DEFINITIONS = [
     if (!d.wallet) throw new Error('Missing wallet in response');
   }),
 
+  makeTest('AskAI: askAiAnalyze TSLA longterm — all sections are non-empty strings (Groq nested-object regression)', async () => {
+    const walletRes = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
+    const balance = walletRes.data?.data?.totalBalance ?? 0;
+    if (balance < 1) throw new Error(`Insufficient tokens (have ${balance}). Skipping.`);
+    const res = await base44.functions.invoke('askAiAnalyze', {
+      requestId: crypto.randomUUID(), asset: 'TSLA', depth: 'deep', timeframe: 'longterm', locale: 'en',
+    });
+    if (res.data?.error) throw new Error('Error: ' + res.data.error.message);
+    const report = res.data?.data?.report;
+    if (!report) throw new Error('No report returned');
+    if (typeof report.summary !== 'string' || !report.summary.trim()) throw new Error('summary is not a non-empty string: ' + JSON.stringify(report.summary));
+    if (!['bullish','bearish','neutral'].includes(report.stance)) throw new Error('Invalid stance: ' + report.stance);
+    const contentSections = report.sections.filter(s => s.id !== 'disclaimer');
+    for (const sec of contentSections) {
+      if (typeof sec.content !== 'string') throw new Error(`Section "${sec.id}" content is not a string: ${JSON.stringify(sec.content).slice(0,80)}`);
+      if (sec.content.trim() === '' || sec.content.includes('Analysis unavailable')) throw new Error(`Section "${sec.id}" has no real content — still showing fallback text`);
+    }
+  }),
+
+  makeTest('AskAI: askAiAnalyze WIX longterm — all sections are non-empty strings', async () => {
+    const walletRes = await base44.functions.invoke('getWallet', { requestId: crypto.randomUUID() });
+    const balance = walletRes.data?.data?.totalBalance ?? 0;
+    if (balance < 1) throw new Error(`Insufficient tokens (have ${balance}). Skipping.`);
+    const res = await base44.functions.invoke('askAiAnalyze', {
+      requestId: crypto.randomUUID(), asset: 'WIX', depth: 'deep', timeframe: 'longterm', locale: 'en',
+    });
+    if (res.data?.error) throw new Error('Error: ' + res.data.error.message);
+    const report = res.data?.data?.report;
+    if (!report) throw new Error('No report returned');
+    if (typeof report.summary !== 'string' || !report.summary.trim()) throw new Error('summary is not a non-empty string');
+    const contentSections = report.sections.filter(s => s.id !== 'disclaimer');
+    for (const sec of contentSections) {
+      if (typeof sec.content !== 'string') throw new Error(`Section "${sec.id}" content is not a string: ${JSON.stringify(sec.content).slice(0,80)}`);
+      if (sec.content.trim() === '' || sec.content.includes('Analysis unavailable')) throw new Error(`Section "${sec.id}" has no real content`);
+    }
+  }),
+
   makeTest('AskAI: askAiAnalyze is idempotent (same requestId returns cached result)', async () => {
     const reqId = crypto.randomUUID();
     // First call

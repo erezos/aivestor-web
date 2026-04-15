@@ -373,11 +373,17 @@ function buildSections(raw, asset) {
       return { id: def.id, title: def.title, content: DISCLAIMER, bullets: [] };
     }
     const src = raw?.sections?.find(s => s.id === def.id) || {};
+    const rawContent = src.content;
+    const content = typeof rawContent === 'string'
+      ? rawContent
+      : rawContent && typeof rawContent === 'object'
+        ? flattenToString(rawContent)
+        : `Analysis unavailable for ${def.title}.`;
     return {
       id: def.id,
       title: def.title,
-      content: sanitize(src.content || `Analysis unavailable for ${def.title}.`),
-      bullets: (src.bullets || []).map(sanitize),
+      content: sanitize(content || `Analysis unavailable for ${def.title}.`),
+      bullets: (src.bullets || []).map(b => sanitize(typeof b === 'string' ? b : flattenToString(b))),
     };
   });
 }
@@ -386,20 +392,50 @@ function buildSections(raw, asset) {
 const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
+// Groq has a ~6k token context limit for practical use — extract only the
+// essential market data lines from the full user prompt to stay under limit.
+function condenseForGroq(userPrompt) {
+  // Keep only the lines that contain actual market numbers/data, skip giant text blocks
+  const lines = userPrompt.split('\n');
+  const keep = lines.filter(l => {
+    const t = l.trim();
+    if (!t) return false;
+    // Keep data lines (numbers, JSON snippets, key labels) but skip long prose paragraphs
+    if (t.startsWith('CRITICAL') || t.startsWith('REASONING') || t.startsWith('ANALYTICAL') || t.startsWith('FEW-SHOT') || t.startsWith('EXAMPLE') || t.startsWith('PROFESSIONAL')) return false;
+    if (t.length > 300) return false; // skip huge single lines
+    return true;
+  });
+  return keep.join('\n').slice(0, 8000); // hard cap
+}
+
 async function callGroq(systemPrompt, userPrompt, schema) {
   if (!GROQ_KEY) throw new Error('GROQ_API_KEY not set');
+
+  const condensedUser = condenseForGroq(userPrompt);
+  const groqSystem = `You are a professional financial analyst. Analyze the given market data and return a JSON report with these EXACT fields as plain strings:
+- summary: string (2-3 sentence overview)
+- stance: exactly one of "bullish", "bearish", or "neutral"
+- confidence: number 0.0-1.0
+- thesis: array of 2-3 string bullet points (reasons to be bullish)
+- riskFactors: array of 2-3 string risk strings
+- sections: array of objects with id, title, content (string), bullets (array of strings)
+
+Section ids MUST be exactly: market_snapshot, ai_conclusion, technical_view, sentiment_news_pulse, scenario_paths, risks_invalidations, action_playbook
+
+CRITICAL: Every field must be a plain string. No nested objects. Return valid JSON only.`;
+
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages: [
-        { role: 'system', content: systemPrompt + '\n\nYou MUST respond with valid JSON only.' },
-        { role: 'user',   content: userPrompt + '\n\nRespond with a valid JSON object.'   },
+        { role: 'system', content: groqSystem },
+        { role: 'user',   content: condensedUser + '\n\nReturn a valid JSON object with the required fields.' },
       ],
       response_format: { type: 'json_object' },
       temperature: 0.3,
-      max_tokens: 4096,
+      max_tokens: 3000,
     }),
   });
   if (!res.ok) {
@@ -412,33 +448,54 @@ async function callGroq(systemPrompt, userPrompt, schema) {
   return JSON.parse(text);
 }
 
+// ── Flatten any nested object/array into a plain string ──────────────────────
+function flattenToString(v) {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object') {
+    // Try common keys first, then join all string values
+    const keys = ['content', 'text', 'value', 'comment', 'summary', 'description'];
+    for (const k of keys) {
+      if (typeof v[k] === 'string' && v[k].trim()) return v[k];
+    }
+    return Object.values(v).filter(x => typeof x === 'string').join(' ').trim();
+  }
+  return String(v);
+}
+
 // ── AI call with Base44 primary + Groq free fallback ─────────────────────────
 // dataDesert = true when no provider had data → use Gemini with web search
 async function invokeWithFallback(base44, systemPrompt, userPrompt, schema, depth, dataDesert = false) {
   const primaryModel  = MODEL_PRIMARY[depth];
   const fallbackModel = MODEL_FALLBACK[depth];
 
-  const callBase44 = (model) => base44.asServiceRole.integrations.Core.InvokeLLM({
-    prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
-    model,
-    response_json_schema: schema,
-  });
+  const callBase44 = async (model) => {
+    const r = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
+      model,
+      response_json_schema: schema,
+    });
+    // Unwrap Base44's envelope if it wraps under "response"
+    return r?.response && typeof r.response === 'object' ? r.response : r;
+  };
 
   // Data desert: use Gemini web-grounded first, then Groq as free fallback
   if (dataDesert) {
     try {
-      const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      const r = await base44.asServiceRole.integrations.Core.InvokeLLM({
         prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
         model: 'gemini_3_flash',
         add_context_from_internet: true,
         response_json_schema: schema,
       });
+      const result = r?.response && typeof r.response === 'object' ? r.response : r;
       return { result, modelUsed: 'gemini_3_flash_web', fallbackUsed: false };
     } catch (_) {}
 
     // Try Base44 fallback model
     try {
-      const result = await callBase44(fallbackModel);
+      const r = await callBase44(fallbackModel);
+      const result = r?.response && typeof r.response === 'object' ? r.response : r;
       return { result, modelUsed: fallbackModel, fallbackUsed: true };
     } catch (_) {}
 
@@ -744,7 +801,8 @@ ${needsLocalization ? `- LOCALIZATION: You MUST also output a "localizedSummary"
 
     try {
       const { result, modelUsed: m, fallbackUsed: f } = await invokeWithFallback(base44, SYSTEM_PROMPT, userPrompt, reportSchema, depth, dataDesert);
-      aiRaw = result;
+      // Base44 InvokeLLM sometimes wraps the JSON under a top-level "response" key
+      aiRaw = result?.response && typeof result.response === 'object' ? result.response : result;
       modelUsed = m;
       fallbackUsed = f;
       inputTokens  = Math.ceil((SYSTEM_PROMPT.length + userPrompt.length) / 4);
@@ -767,6 +825,19 @@ ${needsLocalization ? `- LOCALIZATION: You MUST also output a "localizedSummary"
     }
 
     if (aiRaw) {
+      // Flatten any nested objects Groq may return for string fields
+      if (aiRaw.summary && typeof aiRaw.summary !== 'string') aiRaw.summary = flattenToString(aiRaw.summary);
+      if (aiRaw.stance  && typeof aiRaw.stance  !== 'string') aiRaw.stance  = flattenToString(aiRaw.stance);
+      if (Array.isArray(aiRaw.sections)) {
+        aiRaw.sections = aiRaw.sections.map(s => ({
+          ...s,
+          content: typeof s.content === 'string' ? s.content : flattenToString(s.content),
+          bullets: Array.isArray(s.bullets) ? s.bullets.map(b => typeof b === 'string' ? b : flattenToString(b)) : [],
+        }));
+      }
+      if (Array.isArray(aiRaw.thesis))      aiRaw.thesis      = aiRaw.thesis.map(t => typeof t === 'string' ? t : flattenToString(t));
+      if (Array.isArray(aiRaw.riskFactors)) aiRaw.riskFactors = aiRaw.riskFactors.map(r => typeof r === 'string' ? r : flattenToString(r));
+
       const normalizedStance     = normalizeStance(aiRaw.stance);
       const normalizedConfidence = clampConfidence(aiRaw.confidence);
       const sections             = buildSections(aiRaw, asset);
