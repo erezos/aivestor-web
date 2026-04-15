@@ -81,7 +81,7 @@ export default function WalletBar({ walletData, onBuyTokens, onRefresh, isLogged
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <div className="flex gap-0.5">
-                  {Array.from({ length: cap }).map((_, i) => (
+                  {Array.from({ length: Math.max(0, cap || 3) }).map((_, i) => (
                     <div key={i} className={`w-3 h-1.5 rounded-full transition-all ${i < free ? 'bg-emerald-400' : 'bg-white/10'}`} />
                   ))}
                 </div>
