@@ -1,6 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchMarketIndices } from '../marketData';
 
@@ -29,11 +28,8 @@ export default function MarketIndices() {
     <div className="w-full overflow-hidden">
       <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2">
         {items.map((index, i) => (
-          <motion.div
+          <div
             key={index.symbol}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
             className="glass rounded-xl p-3 min-w-[140px] flex-shrink-0 cursor-pointer glass-hover transition-all"
           >
             <div className="text-xs text-white/40 font-medium mb-1">{index.symbol}</div>
@@ -51,7 +47,7 @@ export default function MarketIndices() {
                 </div>
               </>
             )}
-          </motion.div>
+          </div>
         ))}
       </div>
     </div>

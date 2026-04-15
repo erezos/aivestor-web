@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Newspaper, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 function Skeleton({ className }) {
   return <div className={`bg-white/5 rounded animate-pulse ${className}`} />;
@@ -44,9 +43,7 @@ export default function MarketWrapWidget() {
   );
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="glass rounded-2xl p-5 border border-violet-500/10"
-    >
+    <div className="glass rounded-2xl p-5 border border-violet-500/10">
       <div className="flex items-center gap-2 mb-3">
         <Newspaper className="w-4 h-4 text-violet-400" />
         <span className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">Daily Market Wrap</span>
@@ -76,6 +73,6 @@ export default function MarketWrapWidget() {
       >
         Read full wrap <ArrowRight className="w-3 h-3" />
       </Link>
-    </motion.div>
+    </div>
   );
 }
