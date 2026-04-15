@@ -21,6 +21,7 @@ function getSignalColor(signal) {
 const SKELETON_COUNT = 6;
 
 function TickerRow({ ticker }) {
+  if (!ticker || typeof ticker.symbol !== 'string') return null;
   const signal = SIGNALS[ticker.symbol] || 'Hold';
   return (
     <Link
@@ -60,7 +61,9 @@ export default function TrendingTickers() {
     retry: 1,
   });
 
-  const validTickers = Array.isArray(tickers) ? tickers.filter(t => t && typeof t.symbol === 'string') : [];
+  const validTickers = Array.isArray(tickers)
+    ? tickers.filter(t => t && typeof t.symbol === 'string')
+    : [];
 
   return (
     <div className="glass rounded-2xl p-5">
