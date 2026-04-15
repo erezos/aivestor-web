@@ -80,10 +80,10 @@ export default function WalletBar({ walletData, onBuyTokens, onRefresh, isLogged
                 )}
               </div>
               <div className="flex items-center gap-1.5 mt-1">
-                <div className="flex gap-0.5">
-                  {[...Array(Math.max(1, cap || 3))].map((_, i) => (
-                    <div key={`dot-${i}`} className={`w-3 h-1.5 rounded-full transition-all ${i < free ? 'bg-emerald-400' : 'bg-white/10'}`} />
-                  ))}
+                <div className="flex gap-0.5" data-no-animate="true">
+                  <div className={`w-3 h-1.5 rounded-full transition-all ${0 < free ? 'bg-emerald-400' : 'bg-white/10'}`} />
+                  <div className={`w-3 h-1.5 rounded-full transition-all ${1 < free ? 'bg-emerald-400' : 'bg-white/10'}`} />
+                  <div className={`w-3 h-1.5 rounded-full transition-all ${2 < free ? 'bg-emerald-400' : 'bg-white/10'}`} />
                 </div>
                 {countdown && (
                   <span className="text-[10px] text-white/25 flex items-center gap-1">
