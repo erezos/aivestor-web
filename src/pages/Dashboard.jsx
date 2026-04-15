@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import MarketIndices from '../components/dashboard/MarketIndices';
 import QuickStats from '../components/dashboard/QuickStats';
 import MarketSentiment from '../components/dashboard/MarketSentiment';
@@ -13,11 +12,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 pb-20 md:pb-6">
       {/* Hero */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2"
-      >
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
         <div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
@@ -30,7 +25,7 @@ export default function Dashboard() {
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="text-xs text-white/30">Markets Open</span>
         </div>
-      </motion.div>
+      </div>
 
       {/* Market Ticker Strip */}
       <MarketIndices />
