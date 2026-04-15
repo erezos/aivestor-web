@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { motion } from 'framer-motion';
 import { useSessionTracker, trackPageView, trackBotIfNeeded } from '@/lib/useSessionTracker';
 
 const LOGO_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69b3e95402fa8b08d1ec8a16/d6018ef39_generated_image.png';
@@ -117,11 +116,7 @@ export default function Layout() {
                   <item.icon className="w-4 h-4" />
                   {item.label}
                   {isActive && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className="absolute inset-0 bg-violet-500/10 border border-violet-500/20 rounded-lg"
-                      transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-                    />
+                    <div className="absolute inset-0 bg-violet-500/10 border border-violet-500/20 rounded-lg" />
                   )}
                 </Link>
               );
