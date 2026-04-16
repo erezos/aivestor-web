@@ -145,7 +145,7 @@ export default function AskAI() {
               value={symbol}
               onChange={e => setSymbol(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && canAfford && !generating && handleGenerate()}
-              placeholder="AAPL, BTC, מור השקעות, Volkswagen..."
+              placeholder="AAPL, BTC, Volkswagen, מור השקעות, 丰田..."
               dir="auto"
               className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-white placeholder-white/20 text-sm focus:outline-none focus:border-violet-500/50 focus:bg-white/8 transition-all"
               maxLength={80}

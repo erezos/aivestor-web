@@ -771,7 +771,7 @@ MACRO / SECTOR CONTEXT:
       : 'Provide a concise overview. Each section should have 1-2 key bullets with the most important signal.';
 
     const dataDesertNote = dataDesert
-      ? `\n⚠️ LOCAL / INTERNATIONAL STOCK MODE: Standard market data providers (Finnhub/Alpaca) returned no data for "${asset}". This is a local or regional stock — possibly identified by company name in a local language (e.g. Hebrew, Arabic, Japanese, German, etc.) or by a non-US exchange ticker.
+      ? `\n⚠️ LOCAL / INTERNATIONAL STOCK MODE: Standard market data providers (Finnhub/Alpaca) returned no data for "${asset}". This is a local or regional stock — possibly identified by company name in ANY language (Hebrew, Arabic, Chinese, Japanese, Korean, Russian, German, French, Spanish, Hindi, Turkish, Polish, Dutch, Portuguese, Thai, Vietnamese, etc.) or by a non-US exchange ticker.
 
 YOUR MANDATORY STEPS:
 1. IDENTIFY the company: resolve "${asset}" to its official company name, ticker symbol, and exchange (e.g. TASE, FSE, TSE, LSE, BSE). If the input is in a non-English language, translate and identify it.
