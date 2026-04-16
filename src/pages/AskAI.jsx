@@ -21,7 +21,7 @@ export default function AskAI() {
   const urlParams = new URLSearchParams(window.location.search);
   const preloadSymbol = urlParams.get('symbol') || '';
 
-  const [symbol, setSymbol] = useState(preloadSymbol.toUpperCase());
+  const [symbol, setSymbol] = useState(preloadSymbol);
   const depth = 'deep';
   const [timeframe, setTimeframe] = useState('swing');
   const [report, setReport] = useState(null);
@@ -84,7 +84,7 @@ export default function AskAI() {
   const canAfford = totalBalance >= cost;
 
   async function handleGenerate(sym = symbol) {
-    const s = sym.toUpperCase().trim();
+    const s = sym.trim();
     if (!s) return;
     setError(null);
     setReport(null);
@@ -137,23 +137,24 @@ export default function AskAI() {
       >
         {/* Symbol Input */}
         <div>
-          <label className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2 block">Ticker Symbol</label>
+          <label className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2 block">Stock, Ticker, or Company Name</label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
             <input
               type="text"
               value={symbol}
-              onChange={e => setSymbol(e.target.value.toUpperCase().replace(/[^A-Z0-9.-]/g, ''))}
+              onChange={e => setSymbol(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && canAfford && !generating && handleGenerate()}
-              placeholder="AAPL, BTC, NVDA..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-white placeholder-white/20 text-sm font-mono focus:outline-none focus:border-violet-500/50 focus:bg-white/8 transition-all"
-              maxLength={12}
+              placeholder="AAPL, BTC, מור השקעות, Volkswagen..."
+              dir="auto"
+              className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-white placeholder-white/20 text-sm focus:outline-none focus:border-violet-500/50 focus:bg-white/8 transition-all"
+              maxLength={80}
             />
           </div>
           {/* Popular chips */}
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {POPULAR.map(s => (
-              <button key={s} onClick={() => setSymbol(s)}
+              <button key={s} onClick={() => setSymbol(s.toUpperCase())}
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${symbol === s ? 'bg-violet-500/20 border-violet-500/40 text-violet-300' : 'bg-white/3 border-white/8 text-white/30 hover:text-white/60 hover:border-white/20'}`}
               >{s}</button>
             ))}

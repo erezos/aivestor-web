@@ -609,7 +609,11 @@ Deno.serve(async (req) => {
     if (!body?.asset)     return err('INVALID_INPUT', 'asset is required');
 
     const reqId     = body.requestId;
-    const asset     = body.asset.toUpperCase().trim();
+    const assetRaw  = body.asset.trim();
+    // Detect if this looks like a local/international stock (non-ASCII chars, spaces, or lowercase company name)
+    const isLocalStock = /[^\x00-\x7F]/.test(assetRaw) || /\s/.test(assetRaw.trim()) || (assetRaw.length > 6 && assetRaw !== assetRaw.toUpperCase());
+    // For known ticker symbols keep uppercase; for local stocks preserve the original input
+    const asset     = isLocalStock ? assetRaw : assetRaw.toUpperCase();
     const timeframe = body.timeframe || 'swing';
     const locale    = body.locale    || 'en';
     const depth     = ['quick','standard','deep'].includes(body.depth) ? body.depth : 'deep';
@@ -684,8 +688,9 @@ Deno.serve(async (req) => {
     ]);
 
     // ── Detect data desert (local/foreign asset with no provider coverage) ────
+    // Also force data-desert for local stocks (non-ASCII name or multi-word company name)
     const hasProviderData = !!(quote?.c || technicals);
-    const dataDesert = !hasProviderData;
+    const dataDesert = !hasProviderData || isLocalStock;
 
     // ── Build context object for prompt ───────────────────────────────────────
     const marketContext = {
@@ -766,7 +771,16 @@ MACRO / SECTOR CONTEXT:
       : 'Provide a concise overview. Each section should have 1-2 key bullets with the most important signal.';
 
     const dataDesertNote = dataDesert
-      ? `\n⚠️ DATA DESERT MODE: Standard market data providers (Finnhub/Alpaca) returned no data for "${asset}". This is likely a local/regional stock (e.g. Tel Aviv Stock Exchange, Warsaw, Tokyo, etc.). You MUST use your web search capability and training knowledge to find: current price, recent performance, fundamentals (revenue, P/E, market cap), recent news, and analyst coverage. State the exchange and currency clearly. Be transparent about uncertainty — do NOT fabricate specific numbers you cannot verify.\n`
+      ? `\n⚠️ LOCAL / INTERNATIONAL STOCK MODE: Standard market data providers (Finnhub/Alpaca) returned no data for "${asset}". This is a local or regional stock — possibly identified by company name in a local language (e.g. Hebrew, Arabic, Japanese, German, etc.) or by a non-US exchange ticker.
+
+YOUR MANDATORY STEPS:
+1. IDENTIFY the company: resolve "${asset}" to its official company name, ticker symbol, and exchange (e.g. TASE, FSE, TSE, LSE, BSE). If the input is in a non-English language, translate and identify it.
+2. USE web search and your training knowledge to gather: current or recent price (state the currency), 52-week range, market cap, P/E ratio, revenue trend, recent significant news (last 3–6 months), analyst coverage if any.
+3. PRODUCE a full 7-section report exactly like you would for a US stock — same depth, same structure, same quality.
+4. State the exchange, currency, and data vintage clearly in the market_snapshot section.
+5. Be transparent about uncertainty — do NOT fabricate specific numbers you cannot verify, but always provide your best informed estimate with appropriate confidence calibration.
+6. For the action_playbook, use the local currency and exchange-appropriate liquidity considerations (e.g. lower liquidity = wider stops).
+\n`
       : '';
 
     const needsLocalization = locale && locale !== 'en';
