@@ -27,6 +27,21 @@ const TOP_100 = [
 const CRYPTO_SET = new Set(['BTC','ETH','SOL','XRP','BNB','ADA','DOGE','AVAX','DOT','LINK']);
 const BATCH_SIZE = 5;        // 5 LLM calls per run — safely within timeout and rate limits
 const LLM_DELAY_MS = 1500;  // 1.5s between LLM calls to avoid rate limiting
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+
+async function invokeLLM(base44, prompt, schema) {
+  try {
+    return await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+  } catch (_) {}
+  // Groq free fallback
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt + '\n\nRespond with a valid JSON object.' }], response_format: { type: 'json_object' }, temperature: 0.4, max_tokens: 2048 }),
+  });
+  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
+  return JSON.parse((await res.json()).choices[0].message.content);
+}
 
 Deno.serve(async (req) => {
   try {
@@ -72,9 +87,9 @@ Deno.serve(async (req) => {
         const isCrypto = CRYPTO_SET.has(symbol);
         const assetType = isCrypto ? 'cryptocurrency' : 'stock';
 
-        const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-          prompt: `Investment profile for ${symbol} (${assetType}). Sections: overview (business model, scale), revenue_model (key metrics), moat (competitive advantages), risks (top 3 risks), catalysts (price drivers), who_should_invest (investor profile). Be specific and factual.`,
-          response_json_schema: {
+        const result = await invokeLLM(base44,
+          `Investment profile for ${symbol} (${assetType}). Sections: overview (business model, scale), revenue_model (key metrics), moat (competitive advantages), risks (top 3 risks), catalysts (price drivers), who_should_invest (investor profile). Be specific and factual. Return a JSON object with plain string values only.`,
+          {
             type: 'object',
             properties: {
               overview:          { type: 'string' },
@@ -85,7 +100,7 @@ Deno.serve(async (req) => {
               who_should_invest: { type: 'string' },
             }
           }
-        });
+        );
 
         const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
         const profile = { symbol, ...result, generated_at: now.toISOString(), next_refresh: sevenDays };

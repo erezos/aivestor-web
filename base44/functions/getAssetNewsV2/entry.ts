@@ -8,6 +8,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 const FINNHUB_KEY = Deno.env.get('FINNHUB_API_KEY');
+const GROQ_KEY    = Deno.env.get('GROQ_API_KEY');
 const CRYPTO_SET  = new Set(['BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','DOT','MATIC','LINK','BNB']);
 const TTL_SEC     = 300;
 
@@ -18,13 +19,36 @@ function err(code, message, retryable = false, status = 400) {
   return Response.json({ data: null, meta: { requestId: crypto.randomUUID(), asOf: new Date().toISOString(), cache: { hit: false, ttlSec: 0 }, source: 'system' }, error: { code, message, retryable } }, { status });
 }
 
+// Regex fallback sentiment (used when Groq is unavailable)
 const BULLISH = /surge|jump|soar|rally|gain|beat|record|growth|rise|profit|boost|upgrade|buy|bullish/i;
 const BEARISH = /fall|drop|plunge|decline|miss|loss|risk|warn|downgrade|sell|bearish|weak|tumble/i;
-
-function sentiment(text) {
+function regexSentiment(text) {
   const b = (text.match(BULLISH) || []).length;
   const r = (text.match(BEARISH) || []).length;
   return b > r ? 'bullish' : r > b ? 'bearish' : 'neutral';
+}
+
+// AI sentiment scoring via Groq (free) — much more accurate than regex
+async function aiSentiment(articles) {
+  if (!GROQ_KEY || !articles.length) return null;
+  const compact = articles.map((a, i) => ({ i, h: a.title.slice(0, 100) }));
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: `Financial news headlines. For each, return sentiment (bullish/bearish/neutral) based on market impact.\nHeadlines: ${JSON.stringify(compact)}\nReturn JSON: {"s":[{"i":0,"v":"bullish"},...]}` }],
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+      max_tokens: 512,
+    }),
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  const parsed = JSON.parse(json.choices[0].message.content);
+  const map = {};
+  (parsed.s || []).forEach(x => { map[x.i] = x.v; });
+  return map;
 }
 
 async function fhGet(path) {
@@ -72,7 +96,7 @@ Deno.serve(async (req) => {
       return ok({ items: [], nextCursor: null }, { requestId: reqId });
     }
 
-    // Dedupe by url
+    // Dedupe by url — build articles with regex sentiment first
     const seen = new Set();
     const all  = [];
     for (const a of raw) {
@@ -86,8 +110,14 @@ Deno.serve(async (req) => {
         url: a.url,
         source: a.source || 'Financial News',
         publishedAt: new Date(a.datetime * 1000).toISOString(),
-        sentiment: sentiment(`${a.headline} ${a.summary || ''}`),
+        sentiment: regexSentiment(`${a.headline} ${a.summary || ''}`),
       });
+    }
+
+    // Upgrade sentiment with Groq AI (fire and don't block on failure)
+    const sentimentMap = await aiSentiment(all).catch(() => null);
+    if (sentimentMap) {
+      all.forEach((a, i) => { if (sentimentMap[i]) a.sentiment = sentimentMap[i]; });
     }
 
     // Sort descending by publishedAt (stable pagination)
