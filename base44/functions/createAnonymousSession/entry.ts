@@ -1,31 +1,33 @@
 /**
  * createAnonymousSession — Mobile anonymous auth via stable deviceId.
  *
- * The deviceId (stable install UUID from Flutter secure storage) is hashed
- * into a deterministic email + password so the same device always resolves
- * to the same Base44 user — no email address required.
+ * Since Base44 requires email verification for registered users, we issue our
+ * own HMAC-SHA256 signed JWTs instead, keyed on a deterministic userId derived
+ * from the deviceId + server-side salt.
  *
  * Flow:
- *   1. Derive email = device_<sha256(deviceId)>@aivestor.internal
- *   2. Derive password = sha256(deviceId + DEVICE_SALT) — server-only secret
- *   3. Try register() → if already exists, loginViaEmailPassword()
- *   4. Return access_token (90-day JWT) + wallet state
+ *   1. userId = sha256(deviceId + DEVICE_ID_SALT) — first 32 chars
+ *   2. Issue a signed JWT { sub: userId, iat, exp } using MOBILE_JWT_SECRET
+ *   3. Ensure Wallet row exists for this userId (service role)
+ *   4. Run daily free-token accrual if needed
+ *   5. Return { sessionToken, userId, wallet }
  *
- * Token: standard Base44 JWT, 90-day expiry.
- * Refresh: call this endpoint again with same deviceId — idempotent.
+ * Token: HS256 JWT, 90-day expiry.
+ * Refresh: call this endpoint again with same deviceId — fully idempotent.
  *
  * Request:  { requestId, anonymousUserId, platform, appVersion }
  * Response: { sessionToken, userId, wallet: { freeBalance, paidBalance, totalBalance } }
  *
  * No auth required — this is the bootstrap endpoint.
  */
-import { createClient } from 'npm:@base44/sdk@0.8.25';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const APP_ID     = Deno.env.get('BASE44_APP_ID');
-const SALT       = Deno.env.get('DEVICE_ID_SALT') || 'aivestor_mobile_v1';
+const SALT       = Deno.env.get('DEVICE_ID_SALT')    || 'aivestor_mobile_v1';
+const JWT_SECRET = Deno.env.get('MOBILE_JWT_SECRET') || '';
 const FREE_CAP   = 3;
+const TOKEN_TTL  = 90 * 24 * 60 * 60; // 90 days in seconds
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function ok(data, reqId) {
   return Response.json({
     data,
@@ -43,14 +45,35 @@ function err(code, message, retryable = false, status = 400) {
 
 async function sha256hex(input) {
   const encoded = new TextEncoder().encode(input);
-  const hash    = await crypto.subtle.digest('SHA-256', encoded);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const buf     = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function ensureWallet(base44ServiceRole, userId) {
-  const rows = await base44ServiceRole.entities.Wallet.filter({ user_id: userId });
+function base64url(buf) {
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function signJwt(payload) {
+  const header  = base64url(new TextEncoder().encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
+  const body    = base64url(new TextEncoder().encode(JSON.stringify(payload)));
+  const signingInput = `${header}.${body}`;
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(JWT_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput));
+  return `${signingInput}.${base64url(sig)}`;
+}
+
+async function ensureWallet(svc, userId) {
+  const rows = await svc.entities.Wallet.filter({ user_id: userId });
   if (rows[0]) return rows[0];
-  return await base44ServiceRole.entities.Wallet.create({
+  return await svc.entities.Wallet.create({
     user_id: userId,
     free_balance: 0,
     paid_balance: 0,
@@ -59,6 +82,7 @@ async function ensureWallet(base44ServiceRole, userId) {
   });
 }
 
+// ── Main handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => null);
@@ -66,56 +90,32 @@ Deno.serve(async (req) => {
     if (!body?.platform || !['android', 'ios'].includes(body.platform)) {
       return err('INVALID_INPUT', 'platform must be android or ios');
     }
+    if (!JWT_SECRET) return err('CONFIG_ERROR', 'Server JWT secret not configured', false, 500);
 
-    const reqId      = body.requestId || crypto.randomUUID();
-    const deviceId   = body.anonymousUserId.trim();
+    const reqId    = body.requestId || crypto.randomUUID();
+    const deviceId = body.anonymousUserId.trim();
 
-    // Derive deterministic credentials from deviceId
-    const emailHash  = await sha256hex(deviceId);
-    const passHash   = await sha256hex(deviceId + SALT);
-    const email      = `device_${emailHash}@aivestor.internal`;
-    const password   = passHash; // 64-char hex — strong enough
+    // Deterministic userId from deviceId + server salt
+    const userId = (await sha256hex(deviceId + SALT)).slice(0, 32);
 
-    // Use a public (no-auth) client to register or login
-    const publicClient = createClient({ appId: APP_ID });
+    // Issue a signed JWT
+    const now = Math.floor(Date.now() / 1000);
+    const sessionToken = await signJwt({
+      sub:      userId,
+      platform: body.platform,
+      iat:      now,
+      exp:      now + TOKEN_TTL,
+    });
 
-    let accessToken = null;
-    let userId      = null;
-
-    // Try register first (new device), then login regardless (register doesn't return token)
-    try {
-      await publicClient.auth.register({ email, password });
-    } catch (regErr) {
-      // Ignore "already exists" errors — we'll login below
-      const msg = regErr?.message || '';
-      if (!msg.includes('already') && !msg.includes('exist') && !msg.includes('taken') && !msg.includes('400') && !msg.includes('duplicate')) {
-        console.error('[createAnonymousSession] register error:', msg);
-      }
-    }
-
-    // Always login to get token (works whether we just registered or user existed)
-    try {
-      const loginResult = await publicClient.auth.loginViaEmailPassword(email, password);
-      accessToken = loginResult?.access_token;
-      userId      = loginResult?.user?.id;
-    } catch (loginErr) {
-      console.error('[createAnonymousSession] login error:', loginErr?.message);
-      return err('SESSION_CREATE_FAILED', `Login failed: ${loginErr?.message}`, true, 500);
-    }
-
-    if (!accessToken || !userId) {
-      return err('SESSION_CREATE_FAILED', 'Could not create or resume session', true, 500);
-    }
-
-    // Ensure wallet exists (service role — works regardless of user role)
-    const base44 = createClientFromRequest(req);
+    // Wallet management (service role — no user auth needed here)
+    const base44  = createClientFromRequest(req);
     const wallet  = await ensureWallet(base44.asServiceRole, userId);
 
-    const today = new Date().toISOString().slice(0, 10);
-    let freeBalance  = wallet.free_balance || 0;
-    const paidBalance = wallet.paid_balance || 0;
+    const today       = new Date().toISOString().slice(0, 10);
+    let freeBalance   = wallet.free_balance  || 0;
+    const paidBalance = wallet.paid_balance  || 0;
 
-    // On-demand daily free accrual (same logic as getWallet)
+    // Daily free-token accrual
     if (wallet.last_free_accrual_date !== today && freeBalance < FREE_CAP) {
       const newFree = Math.min(freeBalance + 1, FREE_CAP);
       await base44.asServiceRole.entities.Wallet.update(wallet.id, {
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     }
 
     return ok({
-      sessionToken: accessToken,
+      sessionToken,
       userId,
       wallet: {
         freeBalance,

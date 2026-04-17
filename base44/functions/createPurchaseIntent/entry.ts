@@ -5,7 +5,36 @@
  *
  * Request: { requestId, packId, platform, transactionId }
  */
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+
+// ── Mobile JWT verification ───────────────────────────────────────────────────
+const MOBILE_JWT_SECRET = Deno.env.get('MOBILE_JWT_SECRET') || '';
+
+async function verifyMobileJwt(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const signingInput = `${parts[0]}.${parts[1]}`;
+    const key = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(MOBILE_JWT_SECRET),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'],
+    );
+    const sigBytes = Uint8Array.from(atob(parts[2].replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
+    const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(signingInput));
+    if (!valid) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return { id: payload.sub, isMobile: true };
+  } catch (_) { return null; }
+}
+
+async function resolveUser(req, base44) {
+  try { const u = await base44.auth.me(); if (u) return u; } catch (_) {}
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (token) return await verifyMobileJwt(token);
+  return null;
+}
 
 function ok(data, reqId) {
   return Response.json({ data, meta: { requestId: reqId || crypto.randomUUID(), asOf: new Date().toISOString(), cache: { hit: false, ttlSec: 0 }, source: 'purchase' }, error: null });
@@ -17,8 +46,7 @@ function err(code, message, retryable = false, status = 400) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    let user = null;
-    try { user = await base44.auth.me(); } catch (_) {}
+    const user = await resolveUser(req, base44);
     if (!user) return err('AUTH_REQUIRED', 'Authentication required', false, 401);
 
     const body = await req.json().catch(() => null);
