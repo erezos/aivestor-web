@@ -82,16 +82,25 @@ Deno.serve(async (req) => {
     let accessToken = null;
     let userId      = null;
 
-    // Try register first (new device)
+    // Try register first (new device), then login regardless (register doesn't return token)
     try {
-      const result = await publicClient.auth.register({ email, password });
-      accessToken = result?.access_token;
-      userId      = result?.user?.id;
+      await publicClient.auth.register({ email, password });
     } catch (regErr) {
-      // User already exists (device seen before) → login
+      // Ignore "already exists" errors — we'll login below
+      const msg = regErr?.message || '';
+      if (!msg.includes('already') && !msg.includes('exist') && !msg.includes('taken') && !msg.includes('400') && !msg.includes('duplicate')) {
+        console.error('[createAnonymousSession] register error:', msg);
+      }
+    }
+
+    // Always login to get token (works whether we just registered or user existed)
+    try {
       const loginResult = await publicClient.auth.loginViaEmailPassword(email, password);
       accessToken = loginResult?.access_token;
       userId      = loginResult?.user?.id;
+    } catch (loginErr) {
+      console.error('[createAnonymousSession] login error:', loginErr?.message);
+      return err('SESSION_CREATE_FAILED', `Login failed: ${loginErr?.message}`, true, 500);
     }
 
     if (!accessToken || !userId) {
