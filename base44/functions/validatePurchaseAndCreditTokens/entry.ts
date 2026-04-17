@@ -10,13 +10,22 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
-// ── Token pack registry (must match listTokenPacks) ───────────────────────────
+// ── Token pack registry (must match listTokenPacks + store productIds) ────────
 const PACK_TOKENS = {
-  'pack_5':     5,
-  'pack_15':    15,
-  'pack_50':    50,
-  'starter_4':  4,
-  'heavy_150':  150,
+  // Store productIds (Android/iOS — source of truth for purchases)
+  'starter_5_pack':  5,
+  'tokens_5_pack':   5,
+  'tokens_15_pack':  15,
+  'tokens_40_pack':  40,
+  'second_25_pack':  25,
+  'tokens_100_pack': 100,
+  'tokens_250_pack': 250,
+  // Legacy/PayPal packIds (web — keep for backward compat)
+  'pack_5':          5,
+  'pack_15':         15,
+  'pack_50':         50,
+  'starter_4':       4,
+  'heavy_150':       150,
 };
 
 // Phase 5b toggle: set to true when Apple/Google secrets are configured
