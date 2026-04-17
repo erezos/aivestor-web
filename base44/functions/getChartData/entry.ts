@@ -26,7 +26,7 @@ const BINANCE_CFG = {
 };
 
 // Cache TTL in minutes per range
-const TTL_MIN = { '1d': 5, '5d': 10, '1mo': 60, '3mo': 120, '1y': 240 };
+const TTL_MIN = { '1d': 3, '5d': 5, '1mo': 60, '3mo': 120, '1y': 240 };
 
 async function getAlpacaBars(symbol, range) {
   const { tf, days } = ALPACA_CFG[range] || ALPACA_CFG['3mo'];
@@ -36,11 +36,12 @@ async function getAlpacaBars(symbol, range) {
   if (!res.ok) return [];
   const json = await res.json();
   return (json.bars || []).map(b => ({
-    time:  Math.floor(new Date(b.t).getTime() / 1000),
-    open:  +b.o.toFixed(2),
-    high:  +b.h.toFixed(2),
-    low:   +b.l.toFixed(2),
-    close: +b.c.toFixed(2),
+    time:   Math.floor(new Date(b.t).getTime() / 1000),
+    open:   +b.o.toFixed(4),
+    high:   +b.h.toFixed(4),
+    low:    +b.l.toFixed(4),
+    close:  +b.c.toFixed(4),
+    volume: b.v || 0,
   }));
 }
 
@@ -55,11 +56,12 @@ async function getCryptoBars(symbol, range) {
   const json = await res.json();
   const bars = json.bars?.[alpacaSym] || [];
   return bars.map(b => ({
-    time:  Math.floor(new Date(b.t).getTime() / 1000),
-    open:  +b.o.toFixed(2),
-    high:  +b.h.toFixed(2),
-    low:   +b.l.toFixed(2),
-    close: +b.c.toFixed(2),
+    time:   Math.floor(new Date(b.t).getTime() / 1000),
+    open:   +b.o.toFixed(4),
+    high:   +b.h.toFixed(4),
+    low:    +b.l.toFixed(4),
+    close:  +b.c.toFixed(4),
+    volume: b.v || 0,
   }));
 }
 
@@ -74,8 +76,8 @@ Deno.serve(async (req) => {
     const ttlMs    = (TTL_MIN[range] || 60) * 60000;
     const isCrypto = CRYPTO_SET.has(cleanSym);
 
-    // Only cache 1mo and 3mo — intraday and 1y exceed field size limits
-    const CACHEABLE = new Set(['1mo', '3mo']);
+    // Cache all ranges
+    const CACHEABLE = new Set(['1d', '5d', '1mo', '3mo', '1y']);
 
     // Try cache lookup — non-fatal if it fails
     let entry = null;

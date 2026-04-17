@@ -3,11 +3,29 @@ import { createChart, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { Zap, Loader2, BarChart2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
-async function fetchCandles(symbol, range = '3mo') {
+// ── Cache: prefetched candles keyed by range ──────────────────────────────────
+const candleCache = {};
+
+async function fetchCandles(symbol, range) {
+  const key = `${symbol}_${range}`;
+  if (candleCache[key]) return candleCache[key];
   const res = await base44.functions.invoke('getChartData', { symbol, range });
-  return res.data || [];
+  const data = Array.isArray(res.data) ? res.data : [];
+  if (data.length) candleCache[key] = data;
+  return data;
 }
 
+function prefetchAll(symbol, currentRange) {
+  const ALL_RANGES = ['1d', '5d', '1mo', '3mo', '1y'];
+  ALL_RANGES.filter(r => r !== currentRange).forEach(r => {
+    const key = `${symbol}_${r}`;
+    if (!candleCache[key]) {
+      fetchCandles(symbol, r).catch(() => {});
+    }
+  });
+}
+
+// ── Technical indicators ──────────────────────────────────────────────────────
 function calcSMA(candles, period) {
   const result = [];
   for (let i = period - 1; i < candles.length; i++) {
@@ -37,6 +55,23 @@ function calcRSI(candles, period = 14) {
   return result;
 }
 
+// ── Fix: update ONLY the last candle's close when livePrice arrives ──────────
+// Never inject a synthetic "today" candle — daily bars from Alpaca are EOD
+// and appending a fake candle causes the visible price discrepancy.
+function applyLivePrice(candles, livePrice) {
+  if (!livePrice || !candles.length) return candles;
+  const last = candles[candles.length - 1];
+  return [
+    ...candles.slice(0, -1),
+    {
+      ...last,
+      close: livePrice,
+      high: Math.max(last.high, livePrice),
+      low: Math.min(last.low, livePrice),
+    },
+  ];
+}
+
 const RANGES = [
   { label: '1D', range: '1d' },
   { label: '1W', range: '5d' },
@@ -52,17 +87,6 @@ const CHART_THEME = {
   timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true },
   rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
 };
-
-function injectLiveCandle(candles, livePrice) {
-  if (!livePrice || !candles.length) return candles;
-  const todayTs = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
-  const last = candles[candles.length - 1];
-  // Replace today's candle or append a new one
-  const updated = candles[candles.length - 1].time === todayTs
-    ? [...candles.slice(0, -1), { ...last, close: livePrice, high: Math.max(last.high, livePrice), low: Math.min(last.low, livePrice) }]
-    : [...candles, { time: todayTs, open: last.close, high: Math.max(last.close, livePrice), low: Math.min(last.close, livePrice), close: livePrice }];
-  return updated;
-}
 
 export default function TechnicalChart({ symbol, livePrice }) {
   const mainRef = useRef(null);
@@ -91,7 +115,6 @@ export default function TechnicalChart({ symbol, livePrice }) {
     destroyCharts();
 
     const width = mainRef.current.clientWidth || 600;
-
     const main = createChart(mainRef.current, { ...CHART_THEME, width, height: 320 });
     chartMain.current = main;
 
@@ -110,7 +133,7 @@ export default function TechnicalChart({ symbol, livePrice }) {
     });
     main.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
     vol.setData(candleData.map(c => ({
-      time: c.time, value: c.volume,
+      time: c.time, value: c.volume || 0,
       color: c.close >= c.open ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)',
     })));
     main.timeScale().fitContent();
@@ -118,8 +141,7 @@ export default function TechnicalChart({ symbol, livePrice }) {
     if (showRsi && rsiRef.current) {
       const rsiData = calcRSI(candleData);
       if (rsiData.length > 0) {
-        const rsiWidth = rsiRef.current.clientWidth || 600;
-        const rsiChart = createChart(rsiRef.current, { ...CHART_THEME, width: rsiWidth, height: 120 });
+        const rsiChart = createChart(rsiRef.current, { ...CHART_THEME, width: rsiRef.current.clientWidth || 600, height: 120 });
         chartRsi.current = rsiChart;
 
         const rsiSeries = rsiChart.addLineSeries({ color: '#A78BFA', lineWidth: 1.5, priceLineVisible: false });
@@ -127,27 +149,20 @@ export default function TechnicalChart({ symbol, livePrice }) {
 
         const obLine = rsiChart.addLineSeries({ color: 'rgba(244,63,94,0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
         obLine.setData(rsiData.map(d => ({ time: d.time, value: 70 })));
-
         const osLine = rsiChart.addLineSeries({ color: 'rgba(16,185,129,0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
         osLine.setData(rsiData.map(d => ({ time: d.time, value: 30 })));
 
         seriesRefs.current.rsi = rsiSeries;
         rsiChart.timeScale().fitContent();
-
         main.subscribeCrosshairMove(p => {
           if (p?.time) rsiChart.setCrosshairPosition(p.seriesData.get(cs)?.close ?? 0, p.time, rsiSeries);
         });
       }
     }
 
-    // ResizeObserver
     const ro = new ResizeObserver(() => {
-      if (mainRef.current && chartMain.current) {
-        chartMain.current.applyOptions({ width: mainRef.current.clientWidth });
-      }
-      if (rsiRef.current && chartRsi.current) {
-        chartRsi.current.applyOptions({ width: rsiRef.current.clientWidth });
-      }
+      if (mainRef.current && chartMain.current) chartMain.current.applyOptions({ width: mainRef.current.clientWidth });
+      if (rsiRef.current && chartRsi.current)   chartRsi.current.applyOptions({ width: rsiRef.current.clientWidth });
     });
     if (mainRef.current) ro.observe(mainRef.current);
     roRef.current = ro;
@@ -176,53 +191,74 @@ export default function TechnicalChart({ symbol, livePrice }) {
     }
   }, []);
 
-  // Load candles
+  // ── Load candles for current range ───────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     setAiInsight(null);
-    setCandles([]);
 
-    fetchCandles(symbol, range)
-      .then(data => {
-        if (cancelled) return;
-        setCandles(injectLiveCandle(data, livePrice));
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const key = `${symbol}_${range}`;
+    const cached = candleCache[key];
+
+    if (cached) {
+      // Instant render from memory cache — no loading spinner
+      setCandles(applyLivePrice(cached, livePrice));
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    fetchCandles(symbol, range).then(data => {
+      if (cancelled || !data.length) return;
+      setCandles(applyLivePrice(data, livePrice));
+      setLoading(false);
+    }).catch(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    // Prefetch all other ranges in the background after a short delay
+    const prefetchTimer = setTimeout(() => prefetchAll(symbol, range), 1000);
 
     return () => {
       cancelled = true;
+      clearTimeout(prefetchTimer);
       destroyCharts();
     };
-  }, [symbol, range, destroyCharts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, range]);
 
-  // Update last candle when live price arrives/changes
+  // ── Update last candle when live price changes ────────────────────────────────
   useEffect(() => {
     if (!livePrice || !candles.length) return;
-    setCandles(prev => injectLiveCandle(prev, livePrice));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setCandles(prev => applyLivePrice(prev, livePrice));
+    // Also update the series directly if chart exists (no full rebuild needed)
+    if (seriesRefs.current.candles && candles.length) {
+      const prev = candles[candles.length - 1];
+      seriesRefs.current.candles.update({
+        time: prev.time,
+        open: prev.open,
+        high: Math.max(prev.high, livePrice),
+        low: Math.min(prev.low, livePrice),
+        close: livePrice,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [livePrice]);
 
-  // Build charts once divs are visible and data is ready
+  // ── Build charts when candles change ─────────────────────────────────────────
   useEffect(() => {
     if (loading || !candles.length) return;
-    // rAF ensures the DOM has painted and divs have non-zero dimensions
     const id = requestAnimationFrame(() => {
       buildCharts(candles, indicators.rsi);
       applyIndicators(candles, indicators);
     });
     return () => cancelAnimationFrame(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candles, loading]);
 
   const toggleIndicator = (key) => {
     setIndicators(prev => {
       const next = { ...prev, [key]: !prev[key] };
       if (key === 'rsi') {
-        // Rebuild charts to add/remove RSI panel
         requestAnimationFrame(() => {
           buildCharts(candles, next.rsi);
           applyIndicators(candles, next);
@@ -279,10 +315,8 @@ export default function TechnicalChart({ symbol, livePrice }) {
     }
     const main = chartMain.current;
     if (!main) return;
-
     if (seriesRefs.current.support)    { main.removeSeries(seriesRefs.current.support);    delete seriesRefs.current.support; }
     if (seriesRefs.current.resistance) { main.removeSeries(seriesRefs.current.resistance); delete seriesRefs.current.resistance; }
-
     if (result.supportLevel) {
       const s = main.addLineSeries({ color: 'rgba(16,185,129,0.7)', lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: true, title: 'Support' });
       s.setData(candles.map(c => ({ time: c.time, value: result.supportLevel })));
@@ -308,6 +342,7 @@ export default function TechnicalChart({ symbol, livePrice }) {
         <div className="flex items-center gap-2">
           <BarChart2 className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white/80">Technical Chart</span>
+          {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-white/30" />}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1">
@@ -341,14 +376,15 @@ export default function TechnicalChart({ symbol, livePrice }) {
         </div>
       </div>
 
-      {/* Always render chart divs so refs stay valid — hide with CSS during loading */}
-      <div style={{ display: loading ? 'none' : 'block' }}>
+      {/* Chart area — always rendered, opacity signals loading state */}
+      <div style={{ opacity: loading ? 0.35 : 1, transition: 'opacity 0.2s ease' }}>
         <div ref={mainRef} className="w-full" style={{ height: 320 }} />
         <div ref={rsiRef}  className="w-full" style={{ display: indicators.rsi ? 'block' : 'none', height: 120, marginTop: 4 }} />
       </div>
 
-      {loading && (
-        <div className="h-80 flex items-center justify-center">
+      {/* Only show full spinner on initial cold load (no cached data) */}
+      {loading && !candles.length && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <Loader2 className="w-6 h-6 animate-spin text-violet-400" />
         </div>
       )}
