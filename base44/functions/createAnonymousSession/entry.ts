@@ -86,14 +86,16 @@ async function ensureWallet(svc, userId) {
 Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => null);
-    if (!body?.anonymousUserId) return err('INVALID_INPUT', 'anonymousUserId is required');
+    // Accept either deviceId or anonymousUserId (both mean the same thing)
+    const rawDeviceId = body?.deviceId || body?.anonymousUserId;
+    if (!rawDeviceId) return err('INVALID_INPUT', 'deviceId (or anonymousUserId) is required');
     if (!body?.platform || !['android', 'ios'].includes(body.platform)) {
       return err('INVALID_INPUT', 'platform must be android or ios');
     }
     if (!JWT_SECRET) return err('CONFIG_ERROR', 'Server JWT secret not configured', false, 500);
 
     const reqId    = body.requestId || crypto.randomUUID();
-    const deviceId = body.anonymousUserId.trim();
+    const deviceId = rawDeviceId.trim();
 
     // Deterministic userId from deviceId + server salt
     const userId = (await sha256hex(deviceId + SALT)).slice(0, 32);

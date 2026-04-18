@@ -57,7 +57,6 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await resolveUser(req, base44);
-    if (!user) return err('AUTH_REQUIRED', 'Authentication required', false, 401);
 
     const body          = await req.json().catch(() => ({}));
     const includeOffers = body.includeOffers !== false;
@@ -66,7 +65,17 @@ Deno.serve(async (req) => {
     const config = DEFAULT_CONFIG;
     const rules  = config.eligibilityRules;
 
-    // Load offer state
+    // If no authenticated user, return static pack list (no offer eligibility filtering)
+    if (!user) {
+      const staticPacks = [
+        ...config.packs.filter(p => p.kind === 'starter').map(p => ({ ...p, offerEligible: true })),
+        ...config.packs.filter(p => p.kind === 'standard'),
+        ...config.packs.filter(p => p.kind === 'heavy'),
+      ];
+      return ok({ packs: staticPacks, configVersion: config.configVersion, authenticated: false }, reqId);
+    }
+
+    // Load offer state for authenticated user (personalized eligibility)
     const offerRows = await base44.asServiceRole.entities.OfferState.filter({ user_id: user.id });
     const offer     = offerRows[0] || { free_tokens_used_total: 0, purchase_count: 0, starter_offer_claimed_at: null, heavy_offer_claimed_at: null };
     const purchaseCount = offer.purchase_count || 0;
@@ -94,7 +103,7 @@ Deno.serve(async (req) => {
     const heavyPack = config.packs.find(p => p.kind === 'heavy');
     if (heavyPack) packs.push(heavyPack);
 
-    return ok({ packs, configVersion: config.configVersion }, reqId);
+    return ok({ packs, configVersion: config.configVersion, authenticated: true }, reqId);
   } catch (e) {
     return err('INTERNAL_ERROR', e.message, true, 500);
   }
