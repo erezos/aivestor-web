@@ -34,8 +34,13 @@ Deno.serve(async (req) => {
     let fetched = 0;
     let skipped = 0;
     const NINETY_DAYS = 90 * 24 * 3600 * 1000;
+    // Max 20 actual Finnhub fetches per run to stay well under the 25s function timeout
+    // (20 symbols × 1.2s delay = ~24s). Weekly cadence means all 55 symbols refresh within 3 weeks.
+    const MAX_FETCHES_PER_RUN = 20;
 
     for (let i = 0; i < NOTABLE.length; i++) {
+      if (fetched >= MAX_FETCHES_PER_RUN) break;
+
       const sym = NOTABLE[i];
       const key = `eps_history_${sym}`;
 
@@ -48,16 +53,16 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Rate limit: 1 call per 1.2s (Finnhub free = ~50 calls/min)
-      if (i > 0) await new Promise(r => setTimeout(r, 1200));
+      // Rate limit: delay only between actual Finnhub calls (not skips)
+      if (fetched > 0) await new Promise(r => setTimeout(r, 1300));
 
       const res = await fetch(`https://finnhub.io/api/v1/stock/earnings?symbol=${sym}&limit=8&token=${FINNHUB_KEY}`);
       if (res.status === 429) {
         // Rate limited — stop gracefully, next run will resume remaining symbols
-        console.warn(`Rate limited at symbol ${sym} (${i}/${NOTABLE.length}), will resume next run`);
+        console.warn(`Rate limited at symbol ${sym} (index ${i}/${NOTABLE.length}) after ${fetched} fetches`);
         break;
       }
-      if (!res.ok) continue;
+      if (!res.ok) { console.warn(`Non-OK response for ${sym}: ${res.status}`); continue; }
       const data = await res.json();
       if (!Array.isArray(data) || data.length === 0) continue;
 
@@ -75,7 +80,7 @@ Deno.serve(async (req) => {
       fetched++;
     }
 
-    return Response.json({ success: true, fetched, skipped, total: NOTABLE.length });
+    return Response.json({ success: true, fetched, skipped, total: NOTABLE.length, cappedAt: MAX_FETCHES_PER_RUN });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
