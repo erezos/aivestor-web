@@ -97,7 +97,7 @@ export default function TechnicalChart({ symbol, livePrice }) {
   const roRef = useRef(null);
 
   const [candles,    setCandles]    = useState([]);
-  const [range,      setRange]      = useState('3mo');
+  const [range,      setRange]      = useState('1d');
   const [loading,    setLoading]    = useState(true);
   const [indicators, setIndicators] = useState({ sma20: false, sma50: false, rsi: false });
   const [aiLoading,  setAiLoading]  = useState(false);
