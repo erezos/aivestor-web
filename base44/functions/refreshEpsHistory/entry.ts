@@ -15,11 +15,10 @@ const NOTABLE = [
   'IBM','CSCO','HON','CAT','BA','GE','F','GM','RIVN','HOOD','RBLX','LYFT',
 ];
 
-async function upsert(base44, key, data) {
+async function upsert(base44, existingRow, key, data) {
   const payload = { cache_key: key, data: JSON.stringify(data), refreshed_at: new Date().toISOString() };
-  const existing = await base44.asServiceRole.entities.CachedData.filter({ cache_key: key });
-  if (existing.length > 0) {
-    await base44.asServiceRole.entities.CachedData.update(existing[0].id, payload);
+  if (existingRow) {
+    await base44.asServiceRole.entities.CachedData.update(existingRow.id, payload);
   } else {
     await base44.asServiceRole.entities.CachedData.create(payload);
   }
@@ -34,9 +33,17 @@ Deno.serve(async (req) => {
     let fetched = 0;
     let skipped = 0;
     const NINETY_DAYS = 90 * 24 * 3600 * 1000;
-    // Max 20 actual Finnhub fetches per run to stay well under the 25s function timeout
-    // (20 symbols × 1.2s delay = ~24s). Weekly cadence means all 55 symbols refresh within 3 weeks.
-    const MAX_FETCHES_PER_RUN = 20;
+    // Max 15 fetches per run: 15 × 1.3s delay + ~2s DB pre-load = ~22s, safely under timeout.
+    // Weekly cadence covers all 55 symbols within 4 weeks. 90-day cache means this is fine.
+    const MAX_FETCHES_PER_RUN = 15;
+
+    // Pre-load all existing cache entries in parallel — avoids 55 sequential DB calls inside the loop
+    const allKeys = NOTABLE.map(s => `eps_history_${s}`);
+    const cacheRows = await Promise.all(
+      allKeys.map(k => base44.asServiceRole.entities.CachedData.filter({ cache_key: k }).then(r => r[0] || null))
+    );
+    const cacheMap = {};
+    NOTABLE.forEach((sym, idx) => { cacheMap[sym] = cacheRows[idx]; });
 
     for (let i = 0; i < NOTABLE.length; i++) {
       if (fetched >= MAX_FETCHES_PER_RUN) break;
@@ -45,10 +52,9 @@ Deno.serve(async (req) => {
       const key = `eps_history_${sym}`;
 
       if (!force) {
-        // Check cache age
-        const rows = await base44.asServiceRole.entities.CachedData.filter({ cache_key: key });
-        if (rows.length > 0 && rows[0].refreshed_at) {
-          const age = Date.now() - new Date(rows[0].refreshed_at).getTime();
+        const cached = cacheMap[sym];
+        if (cached?.refreshed_at) {
+          const age = Date.now() - new Date(cached.refreshed_at).getTime();
           if (age < NINETY_DAYS) { skipped++; continue; }
         }
       }
@@ -76,7 +82,7 @@ Deno.serve(async (req) => {
         surprisePct: e.surprisePercent != null ? Math.round(e.surprisePercent * 10) / 10 : null,
       }));
 
-      await upsert(base44, key, history);
+      await upsert(base44, cacheMap[sym], key, history);
       fetched++;
     }
 
