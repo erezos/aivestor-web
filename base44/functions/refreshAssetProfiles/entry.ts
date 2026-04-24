@@ -25,28 +25,21 @@ const TOP_100 = [
 ];
 
 const CRYPTO_SET = new Set(['BTC','ETH','SOL','XRP','BNB','ADA','DOGE','AVAX','DOT','LINK']);
-const BATCH_SIZE = 3;        // 3 LLM calls per run — safe within timeout and Groq rate limits
-const LLM_DELAY_MS = 4000;  // 4s between LLM calls — Groq free tier safe burst window
-const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+const BATCH_SIZE = 2;        // 2 LLM calls per run — conservative to avoid any rate limits
+const LLM_DELAY_MS = 3000;  // 3s between calls
 
+// Use Base44 LLM only — no Groq fallback here since Groq quota is shared with
+// other real-time functions (askAiAnalyze, chartAiMagic) that run concurrently.
+// If Base44 fails, return null so the symbol is skipped gracefully this run.
 async function invokeLLM(base44, prompt, schema) {
-  // Try Base44 first
   try {
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
     if (result && typeof result === 'object') return result;
+    return null;
   } catch (e) {
-    console.warn('Base44 LLM failed, falling back to Groq:', e.message);
+    console.warn('Base44 LLM failed for profile generation:', e.message);
+    return null;
   }
-  // Groq free fallback
-  if (!GROQ_KEY) throw new Error('GROQ_API_KEY not set and Base44 LLM failed');
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt + '\n\nRespond with a valid JSON object.' }], response_format: { type: 'json_object' }, temperature: 0.4, max_tokens: 2048 }),
-  });
-  if (res.status === 429) throw new Error('Rate limit exceeded');
-  if (!res.ok) throw new Error(`Groq error: ${res.status}`);
-  return JSON.parse((await res.json()).choices[0].message.content);
 }
 
 Deno.serve(async (req) => {
@@ -113,6 +106,8 @@ Deno.serve(async (req) => {
           }
         );
 
+        if (!result) { results.errors++; continue; }
+
         const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
         const profile = { symbol, ...result, generated_at: now.toISOString(), next_refresh: sevenDays };
         const key = `asset_profile_${symbol}`;
@@ -125,7 +120,8 @@ Deno.serve(async (req) => {
           await base44.asServiceRole.entities.CachedData.create(payload);
         }
         results.refreshed++;
-      } catch {
+      } catch (e) {
+        console.warn(`Error processing ${symbol}:`, e.message);
         results.errors++;
       }
     }
