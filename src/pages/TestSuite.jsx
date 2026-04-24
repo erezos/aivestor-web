@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { CheckCircle2, XCircle, Loader2, Play, RefreshCw, FlaskConical } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { CheckCircle2, XCircle, Loader2, Play, RefreshCw, FlaskConical, ShieldOff } from 'lucide-react';
 
 const STATUS = { idle: 'idle', running: 'running', pass: 'pass', fail: 'fail' };
 
@@ -624,8 +625,19 @@ function statusIcon(status) {
 }
 
 export default function TestSuite() {
+  const { data: currentUser, isLoading } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
   const [tests, setTests] = useState(TEST_DEFINITIONS.map(t => ({ ...t })));
   const [running, setRunning] = useState(false);
+
+  if (isLoading) return null;
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
+        <ShieldOff className="w-12 h-12 text-white/20" />
+        <p className="text-white/40 text-sm">Access restricted to admins only.</p>
+      </div>
+    );
+  }
 
   const updateTest = (index, patch) => {
     setTests(prev => prev.map((t, i) => i === index ? { ...t, ...patch } : t));
