@@ -100,16 +100,24 @@ Deno.serve(async (req) => {
     if (!body?.intentId)      return err('INVALID_INPUT', 'intentId is required');
     if (!body?.transactionId) return err('INVALID_INPUT', 'transactionId is required');
     if (!body?.productId)     return err('INVALID_INPUT', 'productId is required');
+    if (!body?.platform || !['apple', 'google', 'web'].includes(body.platform)) {
+      return err('INVALID_INPUT', 'platform must be apple, google, or web');
+    }
 
     const reqId  = body.requestId;
     const userId = user.id;
 
-    // Idempotency: already completed → return success without re-crediting
+    const tokensToCredit = PACK_TOKENS[body.productId] || 0;
+    if (tokensToCredit === 0) return err('INVALID_INPUT', `Unknown productId: ${body.productId}`, false, 400);
+
+    // ── Idempotency: lookup by transactionId first ─────────────────────────────
+    // Works whether or not createPurchaseIntent was called first.
     const receipts = await base44.asServiceRole.entities.PurchaseReceipt.filter({ transaction_id: body.transactionId });
-    const receipt  = receipts[0];
+    let receipt    = receipts[0];
+
     if (receipt?.status === 'completed') {
-      const wallet = await base44.asServiceRole.entities.Wallet.filter({ user_id: userId });
-      const w      = wallet[0] || { free_balance: 0, paid_balance: 0 };
+      const walletRows = await base44.asServiceRole.entities.Wallet.filter({ user_id: userId });
+      const w          = walletRows[0] || { free_balance: 0, paid_balance: 0 };
       return ok({
         creditedTokens: receipt.tokens_credited,
         wallet: { freeBalance: w.free_balance || 0, paidBalance: w.paid_balance || 0, totalBalance: (w.free_balance || 0) + (w.paid_balance || 0) },
@@ -121,19 +129,32 @@ Deno.serve(async (req) => {
       return err('PURCHASE_INVALID', receipt.failure_reason || 'Purchase validation failed', false, 402);
     }
 
+    // If no receipt row exists yet (mobile skipped createPurchaseIntent), create one now
+    if (!receipt) {
+      receipt = await base44.asServiceRole.entities.PurchaseReceipt.create({
+        user_id: userId,
+        intent_id: body.intentId,
+        transaction_id: body.transactionId,
+        platform: body.platform,
+        product_id: body.productId,
+        status: 'pending',
+      });
+    }
+
     // ── Validate receipt ────────────────────────────────────────────────────────
     let validationResult = { valid: true }; // Phase 5a: mock success
 
     if (ENABLE_REAL_VALIDATION) {
       if (body.platform === 'apple') {
+        if (!body.receiptData) return err('INVALID_INPUT', 'receiptData is required for apple platform');
         validationResult = await validateApple(body.receiptData);
       } else if (body.platform === 'google') {
+        if (!body.receiptData) return err('INVALID_INPUT', 'receiptData is required for google platform');
         validationResult = await validateGoogle(body.receiptData, body.productId);
       }
     }
 
-    const tokensToCredit = PACK_TOKENS[body.productId] || 0;
-    const receiptId      = receipt?.id;
+    const receiptId = receipt?.id;
 
     if (!validationResult.valid) {
       if (receiptId) {
@@ -141,8 +162,6 @@ Deno.serve(async (req) => {
       }
       return err('PURCHASE_INVALID', validationResult.reason || 'Invalid purchase receipt', false, 402);
     }
-
-    if (tokensToCredit === 0) return err('INVALID_INPUT', `Unknown productId: ${body.productId}`, false, 400);
 
     // ── Credit tokens ───────────────────────────────────────────────────────────
     const walletRows = await base44.asServiceRole.entities.Wallet.filter({ user_id: userId });

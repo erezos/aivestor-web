@@ -31,14 +31,14 @@ const TOKEN_TTL  = 90 * 24 * 60 * 60; // 90 days in seconds
 function ok(data, reqId) {
   return Response.json({
     data,
-    meta: { requestId: reqId || crypto.randomUUID(), asOf: new Date().toISOString() },
+    meta: { requestId: reqId || crypto.randomUUID(), asOf: new Date().toISOString(), source: 'session' },
     error: null,
   });
 }
 function err(code, message, retryable = false, status = 400) {
   return Response.json({
     data: null,
-    meta: { requestId: crypto.randomUUID(), asOf: new Date().toISOString() },
+    meta: { requestId: crypto.randomUUID(), asOf: new Date().toISOString(), source: 'system' },
     error: { code, message, retryable },
   }, { status });
 }
@@ -94,8 +94,10 @@ Deno.serve(async (req) => {
     }
     if (!JWT_SECRET) return err('CONFIG_ERROR', 'Server JWT secret not configured', false, 500);
 
-    const reqId    = body.requestId || crypto.randomUUID();
-    const deviceId = rawDeviceId.trim();
+    const reqId      = body.requestId || crypto.randomUUID();
+    const deviceId   = rawDeviceId.trim();
+    const appVersion = body.appVersion || 'unknown';
+    console.log(`[createAnonymousSession] platform=${body.platform} appVersion=${appVersion} reqId=${reqId}`);
 
     // Deterministic userId from deviceId + server salt
     const userId = (await sha256hex(deviceId + SALT)).slice(0, 32);
@@ -105,6 +107,7 @@ Deno.serve(async (req) => {
     const sessionToken = await signJwt({
       sub:      userId,
       platform: body.platform,
+      ver:      appVersion,
       iat:      now,
       exp:      now + TOKEN_TTL,
     });
