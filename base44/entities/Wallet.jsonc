@@ -2,6 +2,11 @@
   "name": "Wallet",
   "type": "object",
   "properties": {
+    "description": {
+      "type": "string",
+      "description": "Optional notes or description for this wallet record",
+      "maxLength": 1000
+    },
     "user_id": {
       "type": "string",
       "description": "Unique user ID (index)"

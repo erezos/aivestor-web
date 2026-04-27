@@ -1,0 +1,22 @@
+{
+  "name": "EmailSubscriber",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Optional notes or description for this subscriber record",
+      "maxLength": 1000
+    },
+    "email": {
+      "type": "string",
+      "description": "Subscriber email address"
+    },
+    "source": {
+      "type": "string",
+      "description": "Where they subscribed from (market_wrap, etc.)"
+    }
+  },
+  "required": [
+    "email"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "UserPreferences",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Optional notes or description for this preferences record",
+      "maxLength": 1000
+    },
+    "favorite_symbols": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "User's favorite ticker symbols"
+    },
+    "experience_level": {
+      "type": "string",
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "default": "beginner"
+    },
+    "preferred_assets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Preferred asset types"
+    },
+    "daily_streak": {
+      "type": "number",
+      "default": 0
+    },
+    "last_visit_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "xp_points": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": []
+}

@@ -12,7 +12,7 @@ const sentimentConfig = {
   neutral: { color: 'text-amber-400', icon: Sparkles },
 };
 
-export default function News() {
+export default function MarketNews() {
   const [activeCategory, setActiveCategory] = useState('All');
 
   const { data: articles, isLoading, refetch, isFetching } = useQuery({

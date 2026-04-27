@@ -2,6 +2,11 @@
   "name": "OfferState",
   "type": "object",
   "properties": {
+    "description": {
+      "type": "string",
+      "description": "Optional notes or description for this offer state record",
+      "maxLength": 1000
+    },
     "user_id": {
       "type": "string",
       "description": "Unique index \u2014 one row per user"

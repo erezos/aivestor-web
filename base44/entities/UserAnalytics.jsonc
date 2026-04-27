@@ -1,0 +1,108 @@
+{
+  "name": "UserAnalytics",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Optional notes or description for this analytics record",
+      "maxLength": 1000
+    },
+    "user_email": {
+      "type": "string",
+      "description": "User email \u2014 one record per user, upserted"
+    },
+    "country_code": {
+      "type": "string"
+    },
+    "country_name": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "isp": {
+      "type": "string"
+    },
+    "device_type": {
+      "type": "string",
+      "enum": [
+        "mobile",
+        "tablet",
+        "desktop"
+      ],
+      "default": "desktop"
+    },
+    "os": {
+      "type": "string"
+    },
+    "browser": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "screen_width": {
+      "type": "number"
+    },
+    "screen_height": {
+      "type": "number"
+    },
+    "session_count": {
+      "type": "number",
+      "default": 1
+    },
+    "first_seen": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_seen": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_session_duration_seconds": {
+      "type": "number"
+    },
+    "total_time_spent_seconds": {
+      "type": "number",
+      "default": 0
+    },
+    "watchlist_size": {
+      "type": "number",
+      "default": 0
+    },
+    "watchlist_symbols": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pages_visited": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "All unique pages this user has visited"
+    },
+    "referrer": {
+      "type": "string"
+    },
+    "utm_source": {
+      "type": "string"
+    },
+    "utm_medium": {
+      "type": "string"
+    },
+    "utm_campaign": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_email"
+  ]
+}

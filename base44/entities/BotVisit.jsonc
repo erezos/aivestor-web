@@ -1,0 +1,32 @@
+{
+  "name": "BotVisit",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Optional notes or description for this bot visit record",
+      "maxLength": 1000
+    },
+    "bot_name": {
+      "type": "string",
+      "description": "Identified bot name e.g. GPTBot, Googlebot, ClaudeBot"
+    },
+    "user_agent": {
+      "type": "string",
+      "description": "Raw user agent string"
+    },
+    "page": {
+      "type": "string",
+      "description": "Page path visited"
+    },
+    "referrer": {
+      "type": "string"
+    },
+    "ip_country": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_agent"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "CachedData",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Optional notes or description for this cache entry",
+      "maxLength": 1000
+    },
+    "cache_key": {
+      "type": "string",
+      "description": "Unique key for this cache entry (e.g. hotboard, news, earnings, asset_AAPL)"
+    },
+    "data": {
+      "type": "string",
+      "description": "JSON stringified cached payload"
+    },
+    "refreshed_at": {
+      "type": "string",
+      "description": "ISO timestamp of last refresh"
+    }
+  },
+  "required": [
+    "cache_key",
+    "data"
+  ]
+}

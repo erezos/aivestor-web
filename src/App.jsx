@@ -11,7 +11,7 @@ import Dashboard from './pages/Dashboard';
 import HotBoard from './pages/HotBoard';
 import Watchlist from './pages/Watchlist.jsx';
 import Asset from './pages/Asset';
-import News from './pages/News';
+import MarketNews from './pages/MarketNews';
 import Education from './pages/Education';
 import Earnings from './pages/Earnings.jsx';
 import TestSuite from './pages/TestSuite';
@@ -54,7 +54,7 @@ const AuthenticatedApp = () => {
         <Route path="/HotBoard" element={<HotBoard />} />
         <Route path="/Watchlist" element={<Watchlist />} />
         <Route path="/Asset" element={<Asset />} />
-        <Route path="/News" element={<News />} />
+        <Route path="/News" element={<MarketNews />} />
         <Route path="/Education" element={<Education />} />
         <Route path="/Earnings" element={<Earnings />} />
         <Route path="/TestSuite" element={<TestSuite />} />

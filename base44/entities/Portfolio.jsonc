@@ -1,0 +1,43 @@
+{
+  "name": "Portfolio",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Optional notes or description for this portfolio entry",
+      "maxLength": 1000
+    },
+    "symbol": {
+      "type": "string",
+      "description": "Ticker symbol e.g. AAPL, BTC"
+    },
+    "name": {
+      "type": "string",
+      "description": "Asset full name"
+    },
+    "asset_type": {
+      "type": "string",
+      "enum": [
+        "stock",
+        "crypto",
+        "forex",
+        "commodity"
+      ],
+      "default": "stock"
+    },
+    "quantity": {
+      "type": "number",
+      "description": "Number of units held"
+    },
+    "buy_price": {
+      "type": "number",
+      "description": "Average buy price per unit in USD"
+    }
+  },
+  "required": [
+    "symbol",
+    "name",
+    "quantity",
+    "buy_price"
+  ]
+}
