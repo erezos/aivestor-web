@@ -1,0 +1,48 @@
+{
+  "name": "Watchlist",
+  "type": "object",
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "Ticker symbol (e.g. AAPL, BTC)"
+    },
+    "name": {
+      "type": "string",
+      "description": "Company or asset name"
+    },
+    "asset_type": {
+      "type": "string",
+      "enum": [
+        "stock",
+        "crypto",
+        "forex",
+        "commodity"
+      ],
+      "default": "stock"
+    },
+    "device_id": {
+      "type": "string",
+      "description": "Device-based identifier for anonymous user isolation"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Personal notes about this asset"
+    },
+    "alert_price_above": {
+      "type": "number",
+      "description": "Alert when price goes above this"
+    },
+    "alert_price_below": {
+      "type": "number",
+      "description": "Alert when price goes below this"
+    },
+    "sort_order": {
+      "type": "number",
+      "description": "User-defined sort order for watchlist"
+    }
+  },
+  "required": [
+    "symbol",
+    "name"
+  ]
+}
