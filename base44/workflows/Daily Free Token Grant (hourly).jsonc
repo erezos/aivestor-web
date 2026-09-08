@@ -1,0 +1,44 @@
+{
+  "name": "Daily Free Token Grant (hourly)",
+  "description": "Scans all wallets every hour and credits 1 free token to users who haven't received one in 24h (rolling window). Idempotent \u2014 safe for overlapping runs. Max 3 free tokens stacked.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "interval",
+      "cron_expression": null,
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": 60,
+      "interval_unit": "minutes",
+      "interval_anchor": "2026-04-09T10:35:29.799000",
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "daily_free_token_grant_hourly",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_function": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "dailyFreeTokenGrant",
+            "args": {}
+          },
+          "then": "end"
+        }
+      }
+    ]
+  },
+  "x-base44-migrated-from-automation": {
+    "legacy_payload_function": "dailyFreeTokenGrant"
+  }
+}
